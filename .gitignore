@@ -1,0 +1,14 @@
+# ===== .NET / Blazor 构建产物 =====
+bin/
+obj/
+*.user
+.vs/
+.vscode/
+
+# ===== CI 重新生成的发布产物 =====
+.fn-dist/
+
+# ===== 系统 / 编辑器 =====
+.DS_Store
+Thumbs.db
+*.log

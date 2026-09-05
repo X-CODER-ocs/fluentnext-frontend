@@ -1,0 +1,56 @@
+﻿@using Microsoft.FluentUI.AspNetCore.Components
+@using FluentNext.Frontend.Services
+@inject ClientSettings ClientSettings
+@inject IOptions<FluentNextConfig> Config
+
+@* Fluent UI 官方设计主题：强调色用品牌绿，明暗跟随客户端设置（存浏览器缓存）*@
+<FluentDesignTheme Mode="@_mode" CustomColor="@_brandColor" StorageName="fluentnext-theme" />
+
+<ErrorBoundary>
+    <ChildContent>
+        <Router AppAssembly="@typeof(App).Assembly">
+            <Found Context="routeData">
+                <RouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)" />
+                <FocusOnNavigate RouteData="@routeData" Selector="h1" />
+            </Found>
+        </Router>
+    </ChildContent>
+    <ErrorContent Context="ex">
+        @{
+            // 把真实异常打到浏览器 console，方便复现时定位（用户可粘贴给我）
+            Console.Error.WriteLine("FluentNext unhandled exception:\n" + ex.ToString());
+        }
+        <div class="fn-fatal">
+            <div class="fn-fatal-logo">Fluent<span>Next</span></div>
+            <p class="fn-fatal-title">页面渲染时遇到未处理的异常</p>
+            <p class="fn-fatal-hint">异常信息已记录到浏览器控制台（F12 → Console）。</p>
+            <a href="." class="fn-fatal-reload">重新加载页面</a>
+        </div>
+    </ErrorContent>
+</ErrorBoundary>
+
+@code {
+    private DesignThemeModes _mode = DesignThemeModes.System;
+    private string _brandColor = "#4AA26F";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await ClientSettings.InitAsync();
+        _brandColor = Config.Value.BrandColor;
+        _mode = ThemeToMode(ClientSettings.Data.Theme);
+        ClientSettings.Changed += OnSettingsChanged;
+    }
+
+    private void OnSettingsChanged()
+    {
+        _mode = ThemeToMode(ClientSettings.Data.Theme);
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private static DesignThemeModes ThemeToMode(string theme) => theme switch
+    {
+        "Light" => DesignThemeModes.Light,
+        "Dark" => DesignThemeModes.Dark,
+        _ => DesignThemeModes.System
+    };
+}

@@ -1,0 +1,43 @@
+namespace FluentNext.Frontend;
+
+/// <summary>NexT 式主题配置，对应 wwwroot/appsettings.json 的 "FluentNext" 段</summary>
+public class FluentNextConfig
+{
+    /// <summary>强调色（Fluent UI 的 Accent base color），默认绿 #4AA26F</summary>
+    public string BrandColor { get; set; } = "#4AA26F";
+
+    /// <summary>默认布局：list（仅标题） / magazine（含内容）</summary>
+    public string DefaultLayout { get; set; } = "magazine";
+
+    /// <summary>默认主题：Light / Dark / System</summary>
+    public string DefaultTheme { get; set; } = "System";
+
+    /// <summary>导航菜单</summary>
+    public List<MenuItem> Menu { get; set; } = new();
+
+    /// <summary>评论配置：gitalk / utterances / none</summary>
+    public CommentsConfig Comments { get; set; } = new();
+}
+
+public class CommentsConfig
+{
+    public string Provider { get; set; } = "none"; // "gitalk" | "utterances" | "none"
+    public GitalkConfig Gitalk { get; set; } = new();
+    public UtterancesConfig Utterances { get; set; } = new();
+}
+
+public class GitalkConfig
+{
+    public string ClientID { get; set; } = "";
+    public string ClientSecret { get; set; } = "";
+    public string Repo { get; set; } = "";
+    public string Owner { get; set; } = "";
+    public List<string> Admin { get; set; } = new();
+}
+
+public class UtterancesConfig
+{
+    public string Repo { get; set; } = "";        // 例如 "X-CODER-ocs/blog"
+    public string IssueTerm { get; set; } = "pathname";
+    public string Label { get; set; } = "";
+}

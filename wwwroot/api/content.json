@@ -1,0 +1,342 @@
+{
+  "site": {
+    "title": "X-CODER",
+    "description": "X-CODER 的技术博客，分享编程、开发、开源等相关内容。",
+    "url": "https://x-coder-ocs.github.io/blog",
+    "menu": []
+  },
+  "posts": [
+    {
+      "title": "让搜索引擎主动来找我：Hexo 接入三合一收录推送的五个坑",
+      "slug": "hexo-search-engine-submit-pitfalls",
+      "permalink": "https://x-coder-ocs.github.io/blog/2026/09/05/hexo-search-engine-submit-pitfalls/",
+      "date": "2026-09-05T06:30:00.000Z",
+      "updated": "2026-09-05T06:27:47.658Z",
+      "excerpt": "博客搭好、文章写完，然后呢？然后就是没人看。 原因很朴素：搜索引擎压根不知道你更新了。你发完文章，得等爬虫自己溜达过来，这个周期可能是几天，也可能是几周。对刚建的新站来说，基本等于「薛定谔的收录」qwq。 所以这次我给博客接上了主动推送：每…",
+      "content": "<link rel=\"stylesheet\" class=\"aplayer-secondary-style-marker\" href=\"/blog/assets/css/APlayer.min.css\"><script src=\"/blog/assets/js/APlayer.min.js\" class=\"aplayer-secondary-script-marker\"></script><p>博客搭好、文章写完，然后呢？然后就是<strong>没人看</strong>。</p>\n<p>原因很朴素：搜索引擎压根不知道你更新了。你发完文章，得等爬虫自己溜达过来，这个周期可能是几天，也可能是几周。对刚建的新站来说，基本等于「薛定谔的收录」qwq。</p>\n<p>所以这次我给博客接上了<strong>主动推送</strong>：每次部署完，自动把新文章的链接推给百度、必应、Google，让它们立刻派人来抓。</p>\n<p>听起来就是装个插件的事——<strong>实际上踩了五个坑，一个比一个隐蔽</strong>。尤其最后两个，CI 全程显示绿色成功，其实推送一直在失败。这篇就把它们全记下来。</p>\n<h2 id=\"选型一个插件搞定三家\">选型：一个插件搞定三家</h2>\n<p>先说清楚要装什么：</p>\n<table>\n<thead>\n<tr>\n<th>插件</th>\n<th>作用</th>\n</tr>\n</thead>\n<tbody>\n<tr>\n<td><code>hexo-submit-urls-to-search-engine</code></td>\n<td>百度 + 必应 + Google <strong>三合一</strong>推送</td>\n</tr>\n<tr>\n<td><code>hexo-generator-json-content</code></td>\n<td>输出 <code>content.json</code>，相当于给自己留一个内容开放 API</td>\n</tr>\n</tbody>\n</table>\n<p>第一个插件有个<strong>特别容易被忽略的机制</strong>，我读源码才搞明白：</p>\n<ul>\n<li>它是 <strong>generator + deployer 双身份</strong>——<code>hexo generate</code> 时只生成待推送列表 <code>public/urls.txt</code>，<strong>真正发请求是在 <code>hexo deploy</code> 阶段</strong>。</li>\n<li>而绝大多数 Hexo + GitHub Pages 的 CI，只跑 <code>hexo generate</code> 然后 <code>actions/deploy-pages</code>，<strong>从头到尾不会跑 <code>hexo deploy</code></strong>。</li>\n</ul>\n<p>也就是说：插件装了、配置写了、CI 绿了，但<strong>一条链接都没推送出去</strong>。必须在 CI 里显式加一步 <code>npx hexo deploy</code>。</p>\n<h2 id=\"坑一子路径站点的验证文件放错目录就是双路径\">坑一：子路径站点的验证文件，放错目录就是双路径</h2>\n<p>搜索引擎要你证明站点是你的，方式是给一个验证文件，让你放到「站点根目录」。</p>\n<p>我的博客地址是 <code>https://x-coder-ocs.github.io/blog/</code>——注意这个 <code>/blog</code> 后缀，它不是我主动加的，而是 <strong>GitHub Pages 仓库名就叫 <code>blog</code></strong>，所以站点根天然就是 <code>/blog</code>。</p>\n<p>于是我犯了个很自然的错误：既然站点根是 <code>/blog</code>，那我把验证文件放 <code>source/blog/</code> 不就完了？</p>\n<p><strong>错了。</strong> 结果线上出现了一个双 <code>/blog</code> 的路径：</p>\n<table>\n<thead>\n<tr>\n<th>文件位置</th>\n<th>生成到 public</th>\n<th>线上实际 URL</th>\n<th>对不对</th>\n</tr>\n</thead>\n<tbody>\n<tr>\n<td><code>source/blog/BingSiteAuth.xml</code></td>\n<td><code>public/blog/BingSiteAuth.xml</code></td>\n<td><code>/blog/blog/BingSiteAuth.xml</code></td>\n<td>✗ 双路径</td>\n</tr>\n<tr>\n<td><code>source/BingSiteAuth.xml</code></td>\n<td><code>public/BingSiteAuth.xml</code></td>\n<td><code>/blog/BingSiteAuth.xml</code></td>\n<td>✓ 正确</td>\n</tr>\n</tbody>\n</table>\n<p>关键在于：<code>upload-pages-artifact</code> 上传的是整个 <code>public/</code> 目录，而 GitHub Pages <strong>已经</strong>把站点根映射到了 <code>/blog</code>。你再在 <code>source/</code> 里套一层 <code>blog/</code>，就变成 <code>/blog/blog/</code> 了。</p>\n<p><strong>结论：子路径站点的静态验证文件，一律放 <code>source/</code> 根目录，不要放 <code>source/blog/</code>。</strong></p>\n<h2 id=\"坑二hexo-会把你的-html-验证文件当成页面渲染\">坑二：Hexo 会把你的 .html 验证文件当成页面渲染</h2>\n<p>这个坑更阴。文件位置放对了，本地生成也看着正常，结果上线一查——<strong>53 字节的纯文本变成了 13KB 的完整网页</strong>。</p>\n<p>原因是 Hexo 会把 <code>source/</code> 下的 <code>.html</code> 当作<strong>页面</strong>处理，给它套上整套主题模板。谷歌要的那行 <code>google-site-verification: xxx.html</code> 被淹没在一堆 <code>&lt;div&gt;</code> 里。</p>\n<p>解法是 <code>skip_render</code>，让 Hexo 对这些文件原样复制、不做任何处理：</p>\n<figure class=\"highlight yaml\"><table><tbody><tr><td class=\"gutter\"><pre><span class=\"line\">1</span><br><span class=\"line\">2</span><br><span class=\"line\">3</span><br><span class=\"line\">4</span><br><span class=\"line\">5</span><br><span class=\"line\">6</span><br><span class=\"line\">7</span><br><span class=\"line\">8</span><br><span class=\"line\">9</span><br></pre></td><td class=\"code\"><pre><span class=\"line\"><span class=\"comment\"># _config.yml</span></span><br><span class=\"line\"><span class=\"comment\"># 搜索引擎站点验证文件（Google / Bing / 百度）</span></span><br><span class=\"line\"><span class=\"comment\"># 官方要求：验证通过后文件须永久保留在站点根，删除会导致验证失效、收录被取消。</span></span><br><span class=\"line\"><span class=\"comment\"># ⚠️ 必须列入 skip_render，否则 hexo 会把 .html 当 page 套上主题模板，</span></span><br><span class=\"line\"><span class=\"comment\">#    输出完整网页，验证串被淹没导致验证失败。</span></span><br><span class=\"line\"><span class=\"attr\">skip_render:</span></span><br><span class=\"line\">  <span class=\"bullet\">-</span> <span class=\"string\">'google*.html'</span></span><br><span class=\"line\">  <span class=\"bullet\">-</span> <span class=\"string\">'BingSiteAuth.xml'</span></span><br><span class=\"line\">  <span class=\"bullet\">-</span> <span class=\"string\">'baidu_verify_*.html'</span></span><br></pre></td></tr></tbody></table></figure>\n<blockquote>\n<p>顺带一提：<code>.xml</code> 文件本来就不会被渲染，我把它也加进去纯粹是防御性配置，防止以后有人改配置改出问题。</p>\n</blockquote>\n<h2 id=\"坑三github-actions-的-if-里不能写-secrets\">坑三：GitHub Actions 的 <code>if</code> 里不能写 <code>secrets</code></h2>\n<p><strong>这一个坑我栽了两次，而且第一次还判断错了原因。</strong></p>\n<p>我的需求很朴素：「Secret 配了就推送，没配就跳过」。于是很自然地写成了：</p>\n<figure class=\"highlight yaml\"><table><tbody><tr><td class=\"gutter\"><pre><span class=\"line\">1</span><br><span class=\"line\">2</span><br><span class=\"line\">3</span><br><span class=\"line\">4</span><br></pre></td><td class=\"code\"><pre><span class=\"line\"><span class=\"comment\"># ❌ 错误写法，会让整个 workflow 启动失败</span></span><br><span class=\"line\"><span class=\"bullet\">-</span> <span class=\"attr\">name:</span> <span class=\"string\">Submit</span> <span class=\"string\">URLs</span> <span class=\"string\">to</span> <span class=\"string\">search</span> <span class=\"string\">engines</span></span><br><span class=\"line\">  <span class=\"attr\">if:</span> <span class=\"string\">${{</span> <span class=\"string\">secrets.BING_TOKEN</span> <span class=\"type\">!=</span> <span class=\"string\">''</span> <span class=\"string\">}}</span></span><br><span class=\"line\">  <span class=\"attr\">run:</span> <span class=\"string\">npx</span> <span class=\"string\">hexo</span> <span class=\"string\">deploy</span></span><br></pre></td></tr></tbody></table></figure>\n<p>结果 CI 直接启动失败，报 <code>workflow file issue</code>。我当时以为是「引用了未定义的 Secret」导致的，于是把 Google 那步注释掉——<strong>还是失败</strong>。</p>\n<p>真正的答案是：<strong>GitHub Actions 压根不允许在 <code>if</code> 条件里使用 <code>secrets</code> context</strong>。<code>if</code> 只支持 <code>github</code>、<code>needs</code>、<code>vars</code>、<code>inputs</code>、<code>env</code>、<code>steps</code>、<code>job</code>、<code>runner</code>、<code>matrix</code>、<code>strategy</code> 这些。</p>\n<p>表现症状很有辨识度，记住这几个特征：</p>\n<ol>\n<li>run 的名字从正常的工作流名，退化成<strong>文件路径</strong> <code>.github/workflows/pages.yml</code>；</li>\n<li>查 jobs 接口返回 <code>total_count: 0</code>——<strong>一个 job 都没起来</strong>；</li>\n<li>报错提示是 <code>This run likely failed because of a workflow file issue</code>。</li>\n</ol>\n<p>正确写法是：<strong>Secret 注入 <code>env</code>，在 shell 里判空</strong>。</p>\n<figure class=\"highlight yaml\"><table><tbody><tr><td class=\"gutter\"><pre><span class=\"line\">1</span><br><span class=\"line\">2</span><br><span class=\"line\">3</span><br><span class=\"line\">4</span><br><span class=\"line\">5</span><br><span class=\"line\">6</span><br><span class=\"line\">7</span><br><span class=\"line\">8</span><br><span class=\"line\">9</span><br><span class=\"line\">10</span><br><span class=\"line\">11</span><br></pre></td><td class=\"code\"><pre><span class=\"line\"><span class=\"comment\"># ✅ 正确写法</span></span><br><span class=\"line\"><span class=\"bullet\">-</span> <span class=\"attr\">name:</span> <span class=\"string\">Submit</span> <span class=\"string\">URLs</span> <span class=\"string\">to</span> <span class=\"string\">search</span> <span class=\"string\">engines</span></span><br><span class=\"line\">  <span class=\"attr\">continue-on-error:</span> <span class=\"literal\">true</span></span><br><span class=\"line\">  <span class=\"attr\">env:</span></span><br><span class=\"line\">    <span class=\"attr\">BING_TOKEN:</span> <span class=\"string\">${{</span> <span class=\"string\">secrets.BING_TOKEN</span> <span class=\"string\">}}</span></span><br><span class=\"line\">  <span class=\"attr\">run:</span> <span class=\"string\">|</span></span><br><span class=\"line\"><span class=\"string\">    if [ -z \"$BING_TOKEN\" ] &amp;&amp; [ ! -f google-key.json ]; then</span></span><br><span class=\"line\"><span class=\"string\">      echo \"密钥均未配置，跳过推送\"</span></span><br><span class=\"line\"><span class=\"string\">      exit 0</span></span><br><span class=\"line\"><span class=\"string\">    fi</span></span><br><span class=\"line\"><span class=\"string\">    npx hexo deploy</span></span><br></pre></td></tr></tbody></table></figure>\n<h2 id=\"坑四continue-on-error-会让失败看起来成功\">坑四：<code>continue-on-error</code> 会让失败「看起来成功」</h2>\n<p>上面那段代码里有个 <code>continue-on-error: true</code>，我加它的本意是「推送失败也别阻断发版」——这个想法本身没错，但它带来一个严重的副作用：</p>\n<p><strong>推送失败时，step 依然显示绿色 success。</strong></p>\n<p>我被这个坑结结实实骗了一次。CI 全绿，我心想稳了，结果去翻日志才发现谷歌一直在报 403。</p>\n<p><strong>教训：只要给推送步加了 <code>continue-on-error</code>，就绝不能用「绿勾」判断推送成败，必须看日志。</strong></p>\n<h2 id=\"坑五google-返回-403failed-to-verify-the-url-ownership\">坑五：Google 返回 403，<code>Failed to verify the URL ownership</code></h2>\n<p>谷歌推送需要的是<strong>服务账号的 JSON 私钥</strong>，流程和必应拿一个 token 完全不是一个量级：</p>\n<ol>\n<li>Google Cloud 建项目 → 启用 <strong>Web Search Indexing API</strong></li>\n<li>建<strong>服务账号</strong> → 生成 <strong>JSON 密钥</strong>并下载</li>\n<li>把 JSON 的<strong>全部内容</strong>填进 GitHub Secret <code>GOOGLE_KEY_JSON</code></li>\n<li><strong>回 Search Console，把服务账号邮箱加为站点的「所有者」</strong> ← 最容易漏</li>\n</ol>\n<p>第 4 步漏掉的话，就会喜提这个错误：</p>\n<figure class=\"highlight json\"><table><tbody><tr><td class=\"gutter\"><pre><span class=\"line\">1</span><br><span class=\"line\">2</span><br><span class=\"line\">3</span><br><span class=\"line\">4</span><br><span class=\"line\">5</span><br><span class=\"line\">6</span><br><span class=\"line\">7</span><br></pre></td><td class=\"code\"><pre><span class=\"line\"><span class=\"punctuation\">{</span></span><br><span class=\"line\">  <span class=\"attr\">\"error\"</span><span class=\"punctuation\">:</span> <span class=\"punctuation\">{</span></span><br><span class=\"line\">    <span class=\"attr\">\"code\"</span><span class=\"punctuation\">:</span> <span class=\"number\">403</span><span class=\"punctuation\">,</span></span><br><span class=\"line\">    <span class=\"attr\">\"message\"</span><span class=\"punctuation\">:</span> <span class=\"string\">\"Permission denied. Failed to verify the URL ownership.\"</span><span class=\"punctuation\">,</span></span><br><span class=\"line\">    <span class=\"attr\">\"status\"</span><span class=\"punctuation\">:</span> <span class=\"string\">\"PERMISSION_DENIED\"</span></span><br><span class=\"line\">  <span class=\"punctuation\">}</span></span><br><span class=\"line\"><span class=\"punctuation\">}</span></span><br></pre></td></tr></tbody></table></figure>\n<p>意思很直白：<strong>密钥是对的，token 也换到了，但谷歌不认这个服务账号对网站有所有权</strong>。</p>\n<p>排查时注意这几点：</p>\n<ul>\n<li>加的必须是<strong>你验证过的那个具体资源</strong>（比如 <code>https://xxx.github.io/blog/</code>），不是根域名资源；</li>\n<li>邮箱就是 JSON 里的 <code>client_email</code> 字段，形如 <code>xxx@项目id.iam.gserviceaccount.com</code>；</li>\n<li><strong>权限级别最容易翻车</strong>，下面单独说。</li>\n</ul>\n<h3 id=\"权限必须选拥有者选完整照样-403\">权限必须选「拥有者」，选「完整」照样 403</h3>\n<p>GSC 给用户分三种权限：</p>\n<table>\n<thead>\n<tr>\n<th>权限级别</th>\n<th>能否调用 Indexing API</th>\n</tr>\n</thead>\n<tbody>\n<tr>\n<td><strong>拥有者</strong>（Owner）</td>\n<td>✅ 可以</td>\n</tr>\n<tr>\n<td><strong>完整</strong>（Full user）</td>\n<td>❌ 不行，照样 403</td>\n</tr>\n<tr>\n<td>受限（Restricted）</td>\n<td>❌ 不行</td>\n</tr>\n</tbody>\n</table>\n<p>我第一遍就是加成了「<strong>完整</strong>」。这个坑的阴险之处在于：GSC 的「用户和权限」页面上<strong>明明显示着这个服务账号存在、且拥有权限</strong>，看上去一切都对，你根本不会怀疑是权限问题——但它就是一直 403 qwq。</p>\n<p><strong>这比「压根忘了添加用户」难查得多</strong>，因为前者你一眼就能看出漏了什么，后者界面上什么都不缺。</p>\n<p>改回「拥有者」之后，响应立刻从报错变成了成功：</p>\n<figure class=\"highlight json\"><table><tbody><tr><td class=\"gutter\"><pre><span class=\"line\">1</span><br><span class=\"line\">2</span><br><span class=\"line\">3</span><br><span class=\"line\">4</span><br><span class=\"line\">5</span><br></pre></td><td class=\"code\"><pre><span class=\"line\"><span class=\"punctuation\">{</span></span><br><span class=\"line\">  <span class=\"attr\">\"urlNotificationMetadata\"</span><span class=\"punctuation\">:</span> <span class=\"punctuation\">{</span></span><br><span class=\"line\">    <span class=\"attr\">\"url\"</span><span class=\"punctuation\">:</span> <span class=\"string\">\"https://xxx.github.io/blog/2026/09/03/hello-xcoder/\"</span></span><br><span class=\"line\">  <span class=\"punctuation\">}</span></span><br><span class=\"line\"><span class=\"punctuation\">}</span></span><br></pre></td></tr></tbody></table></figure>\n<p>看到 <strong><code>urlNotificationMetadata</code></strong> 这个字段就说明推送成功了（失败时对应的是 <code>error</code>）。</p>\n<blockquote>\n<p>另外提醒一句：那个 JSON 含私钥，<strong>千万别提交进仓库</strong>，也别放进项目目录——我这边是让 CI 从 Secret 动态生成文件的。</p>\n</blockquote>\n<h2 id=\"附赠怎么从-ci-日志里挖出被脱敏的真相\">附赠：怎么从 CI 日志里挖出被脱敏的真相</h2>\n<p>GitHub 会自动脱敏日志里跟 Secret 相关的内容，我的谷歌响应被脱敏成了这样：</p>\n<figure class=\"highlight plaintext\"><table><tbody><tr><td class=\"gutter\"><pre><span class=\"line\">1</span><br><span class=\"line\">2</span><br><span class=\"line\">3</span><br><span class=\"line\">4</span><br><span class=\"line\">5</span><br></pre></td><td class=\"code\"><pre><span class=\"line\">Google response:  ***</span><br><span class=\"line\">  error: ***</span><br><span class=\"line\">    code: 403,</span><br><span class=\"line\">    message: 'Permission denied. Failed to verify the URL ownership.',</span><br><span class=\"line\">    status: 'PERMISSION_DENIED'</span><br></pre></td></tr></tbody></table></figure>\n<p>注意——<strong>外层被打了码，但 <code>code</code> / <code>message</code> / <code>status</code> 这些字段反而保留下来了</strong>。所以哪怕响应整体被脱敏，也足够定位问题。</p>\n<p>如果 <code>gh</code> 命令用不了，可以直接用 curl 拉日志：</p>\n<figure class=\"highlight bash\"><table><tbody><tr><td class=\"gutter\"><pre><span class=\"line\">1</span><br><span class=\"line\">2</span><br><span class=\"line\">3</span><br><span class=\"line\">4</span><br></pre></td><td class=\"code\"><pre><span class=\"line\">TOKEN=$(gh auth token)</span><br><span class=\"line\">JOBID=&lt;job 的 <span class=\"built_in\">id</span>&gt;</span><br><span class=\"line\">curl -sL -H <span class=\"string\">\"Authorization: Bearer <span class=\"variable\">$TOKEN</span>\"</span> \\</span><br><span class=\"line\">  <span class=\"string\">\"https://api.github.com/repos/&lt;owner&gt;/&lt;repo&gt;/actions/jobs/<span class=\"variable\">$JOBID</span>/logs\"</span> -o ci.log</span><br></pre></td></tr></tbody></table></figure>\n<p>⚠️ 一个反直觉的点：<strong>这个接口返回的不是 zip，是纯文本</strong>，别傻乎乎去解压，直接 grep 就行。</p>\n<h2 id=\"最后验证文件要永久保留\">最后：验证文件要永久保留</h2>\n<p>谷歌和必应都明确说了：<strong>验证通过后，验证文件也不能删</strong>，删了会导致验证失效、收录被取消。</p>\n<p>为了防止未来的我自己手贱删掉，我在 CI 里加了一道守卫：</p>\n<figure class=\"highlight yaml\"><table><tbody><tr><td class=\"gutter\"><pre><span class=\"line\">1</span><br><span class=\"line\">2</span><br><span class=\"line\">3</span><br><span class=\"line\">4</span><br><span class=\"line\">5</span><br><span class=\"line\">6</span><br><span class=\"line\">7</span><br><span class=\"line\">8</span><br><span class=\"line\">9</span><br><span class=\"line\">10</span><br><span class=\"line\">11</span><br><span class=\"line\">12</span><br><span class=\"line\">13</span><br><span class=\"line\">14</span><br><span class=\"line\">15</span><br><span class=\"line\">16</span><br><span class=\"line\">17</span><br><span class=\"line\">18</span><br><span class=\"line\">19</span><br></pre></td><td class=\"code\"><pre><span class=\"line\"><span class=\"bullet\">-</span> <span class=\"attr\">name:</span> <span class=\"string\">Guard</span> <span class=\"string\">search</span> <span class=\"string\">engine</span> <span class=\"string\">auth</span> <span class=\"string\">files</span></span><br><span class=\"line\">  <span class=\"attr\">shell:</span> <span class=\"string\">bash</span></span><br><span class=\"line\">  <span class=\"attr\">run:</span> <span class=\"string\">|</span></span><br><span class=\"line\"><span class=\"string\">    set -e</span></span><br><span class=\"line\"><span class=\"string\">    # 用 bash 数组 + nullglob 收集验证文件：换名（换账户后哈希变化）无需改动本步</span></span><br><span class=\"line\"><span class=\"string\">    shopt -s nullglob</span></span><br><span class=\"line\"><span class=\"string\">    files=(public/BingSiteAuth.xml public/google*.html public/baidu_verify_*.html)</span></span><br><span class=\"line\"><span class=\"string\">    for f in \"${files[@]}\"; do</span></span><br><span class=\"line\"><span class=\"string\">      if [ ! -f \"$f\" ]; then</span></span><br><span class=\"line\"><span class=\"string\">        echo \"::error::缺少搜索引擎验证文件 $f（勿删，官方要求永久保留）\"</span></span><br><span class=\"line\"><span class=\"string\">        exit 1</span></span><br><span class=\"line\"><span class=\"string\">      fi</span></span><br><span class=\"line\"><span class=\"string\">      size=$(wc -c &lt; \"$f\")</span></span><br><span class=\"line\"><span class=\"string\">      if [ \"$size\" -gt 1000 ]; then</span></span><br><span class=\"line\"><span class=\"string\">        echo \"::error::$(basename \"$f\") 大小 ${size} 字节，疑似被渲染，检查 skip_render\"</span></span><br><span class=\"line\"><span class=\"string\">        exit 1</span></span><br><span class=\"line\"><span class=\"string\">      fi</span></span><br><span class=\"line\"><span class=\"string\">      echo \"OK: $(basename \"$f\") (${size} 字节，纯文本)\"</span></span><br><span class=\"line\"><span class=\"string\">    done</span></span><br></pre></td></tr></tbody></table></figure>\n<p>它同时防两件事：<strong>文件被误删</strong>、<strong>文件被渲染</strong>（渲染后体积会暴涨到 13KB，一测就知道）。</p>\n<p>这里还有个小坑：<strong>一定要显式写 <code>shell: bash</code></strong>。我本地是 zsh，跑起来完全正常，但 zsh 和 bash 在 glob 展开、变量单词分割上行为不一致，不锁死 shell 迟早出事。</p>\n<h2 id=\"小结一张-checklist\">小结：一张 checklist</h2>\n<table>\n<thead>\n<tr>\n<th>检查项</th>\n<th>要点</th>\n</tr>\n</thead>\n<tbody>\n<tr>\n<td>插件机制</td>\n<td>推送只在 <code>hexo deploy</code> 阶段发生，CI 必须显式跑</td>\n</tr>\n<tr>\n<td>验证文件位置</td>\n<td>子路径站点放 <code>source/</code> 根，<strong>不是</strong> <code>source/blog/</code></td>\n</tr>\n<tr>\n<td>防渲染</td>\n<td>验证文件必须进 <code>skip_render</code>，否则被套模板</td>\n</tr>\n<tr>\n<td>Secret 用法</td>\n<td><strong>绝不能</strong>出现在 <code>if</code> 里，只能进 <code>env</code></td>\n</tr>\n<tr>\n<td>成败判断</td>\n<td>有 <code>continue-on-error</code> 就不能看绿勾，必须翻日志</td>\n</tr>\n<tr>\n<td>谷歌授权</td>\n<td>服务账号邮箱要在 GSC 里加成<strong>拥有者</strong>（「完整」权限不够，仍会 403）</td>\n</tr>\n<tr>\n<td>推送成功标志</td>\n<td>必应看 <code>d: null</code>，谷歌看 <code>urlNotificationMetadata</code></td>\n</tr>\n<tr>\n<td>文件保留</td>\n<td>验证通过后永久保留，建议加 CI 守卫</td>\n</tr>\n<tr>\n<td>排障手法</td>\n<td>日志是纯文本，脱敏了也留着 <code>code</code> / <code>message</code></td>\n</tr>\n</tbody>\n</table>\n<p>整套折腾下来，最大的感受是：<strong>CI 的绿色是个很不靠谱的信号</strong>。它会因为你写错一个 <code>if</code> 而直接不起来，也会因为 <code>continue-on-error</code> 而对失败视而不见。真正的真相，永远在日志里 awa。</p>\n<hr>\n<p>本文记录于一次真实的「从零接通三引擎推送」过程，所有坑都是本人亲自踩的（踩了两遍的那种也有 qwq）。如果你也在给 Hexo 博客接收录推送，希望这篇能帮你省下几个小时。</p>\n",
+      "toc": [
+        {
+          "level": 2,
+          "text": "选型：一个插件搞定三家",
+          "id": "选型一个插件搞定三家"
+        },
+        {
+          "level": 2,
+          "text": "坑一：子路径站点的验证文件，放错目录就是双路径",
+          "id": "坑一子路径站点的验证文件放错目录就是双路径"
+        },
+        {
+          "level": 2,
+          "text": "坑二：Hexo 会把你的 .html 验证文件当成页面渲染",
+          "id": "坑二hexo-会把你的-html-验证文件当成页面渲染"
+        },
+        {
+          "level": 2,
+          "text": "坑三：GitHub Actions 的 if 里不能写 secrets",
+          "id": "坑三github-actions-的-if-里不能写-secrets"
+        },
+        {
+          "level": 2,
+          "text": "坑四：continue-on-error 会让失败「看起来成功」",
+          "id": "坑四continue-on-error-会让失败看起来成功"
+        },
+        {
+          "level": 2,
+          "text": "坑五：Google 返回 403，Failed to verify the URL ownership",
+          "id": "坑五google-返回-403failed-to-verify-the-url-ownership"
+        },
+        {
+          "level": 3,
+          "text": "权限必须选「拥有者」，选「完整」照样 403",
+          "id": "权限必须选拥有者选完整照样-403"
+        },
+        {
+          "level": 2,
+          "text": "附赠：怎么从 CI 日志里挖出被脱敏的真相",
+          "id": "附赠怎么从-ci-日志里挖出被脱敏的真相"
+        },
+        {
+          "level": 2,
+          "text": "最后：验证文件要永久保留",
+          "id": "最后验证文件要永久保留"
+        },
+        {
+          "level": 2,
+          "text": "小结：一张 checklist",
+          "id": "小结一张-checklist"
+        }
+      ],
+      "categories": [
+        "教程"
+      ],
+      "tags": [
+        "Hexo",
+        "博客搭建",
+        "GitHub Actions",
+        "SEO",
+        "搜索引擎收录"
+      ]
+    },
+    {
+      "title": "给博客接上评论系统：用 Utterances 把留言存进 GitHub Issues",
+      "slug": "blog-comments-utterances",
+      "permalink": "https://x-coder-ocs.github.io/blog/2026/09/04/blog-comments-utterances/",
+      "date": "2026-09-04T10:40:00.000Z",
+      "updated": "2026-09-04T10:51:05.702Z",
+      "excerpt": "静态博客最尴尬的一件事：它能发文章，但没有「评论」这个灵魂功能。原因很简单——纯静态页面没有后端、没有数据库，你总不能让访客对着一张图留言吧 awa。 所以给本博客挑评论系统时，我定了几条硬标准： 不能要密钥：我可不想把 GitHub To…",
+      "content": "<link rel=\"stylesheet\" class=\"aplayer-secondary-style-marker\" href=\"/blog/assets/css/APlayer.min.css\"><script src=\"/blog/assets/js/APlayer.min.js\" class=\"aplayer-secondary-script-marker\"></script><p>静态博客最尴尬的一件事：它能发文章，但没有「评论」这个灵魂功能。原因很简单——纯静态页面没有后端、没有数据库，你总不能让访客对着一张图留言吧 awa。</p>\n<p>所以给本博客挑评论系统时，我定了几条硬标准：</p>\n<ul>\n<li><strong>不能要密钥</strong>：我可不想把 GitHub Token 之类塞进公开仓库，太刺激了。</li>\n<li><strong>不能要服务器</strong>：本来就是用 GitHub Pages 白嫖托管的，再搞个后端就本末倒置了。</li>\n<li><strong>数据得归我</strong>：评论要落在我自己的仓库里，不能归别人管。</li>\n</ul>\n<p>顺着这三条去筛，最后落在了 <strong>Utterances</strong> 上。</p>\n<h2 id=\"什么是-utterances\">什么是 Utterances</h2>\n<p>一句话：<strong>一个把 GitHub Issues 当评论区的开源脚本</strong>。</p>\n<p>它的工作原理特别「白嫖主义」：</p>\n<ol>\n<li>访客用 GitHub 账号登录（也就是他得有个 GitHub 号）；</li>\n<li>他写的评论，被 Utterances 直接写成你仓库里的 <strong>一条 Issue</strong>；</li>\n<li>页面通过 <code>&lt;iframe&gt;</code> 加载 Utterances 官方脚本，把对应的 Issue 渲染成评论区显示出来。</li>\n</ol>\n<p>也就是说——<strong>你不需要任何数据库、不需要任何服务器、不需要任何密钥</strong>。评论就是 Issues，Issues 就是评论。整件事完全跑在 GitHub 的生态里，和 GitHub Pages 是同一个妈，天然搭 awa。</p>\n<table>\n<thead>\n<tr>\n<th>方案</th>\n<th>后端</th>\n<th>密钥</th>\n<th>数据归属</th>\n<th>我的评价</th>\n</tr>\n</thead>\n<tbody>\n<tr>\n<td>Disqus</td>\n<td>有（它家服务器）</td>\n<td>不需要</td>\n<td>第三方</td>\n<td>广告多、国内慢、隐私劝退</td>\n</tr>\n<tr>\n<td>Valine</td>\n<td>有（LeanCloud 等）</td>\n<td>需要</td>\n<td>第三方</td>\n<td>要注册 BaaS，懒得搞</td>\n</tr>\n<tr>\n<td>Gitalk</td>\n<td>无</td>\n<td>需要（GitHub OAuth App）</td>\n<td>自己仓库</td>\n<td>思路对，但配 OAuth 略烦</td>\n</tr>\n<tr>\n<td><strong>Utterances</strong></td>\n<td><strong>无</strong></td>\n<td><strong>不需要</strong></td>\n<td><strong>自己仓库</strong></td>\n<td>正中下怀 awa</td>\n</tr>\n</tbody>\n</table>\n<h2 id=\"配置步骤next-真就三步\">配置步骤（NexT 真就三步）</h2>\n<h3 id=\"第-1-步给仓库装上-utterances-app\">第 1 步：给仓库装上 Utterances App</h3>\n<p>打开 <a href=\"https://github.com/apps/utterances\">github.com/apps/utterances</a>，点 <strong>Install</strong>，把你的博客仓库（<code>X-CODER-ocs/blog</code>）授权进去。</p>\n<blockquote>\n<p>⚠️ 这一步很多人会忘。没装 App，访客评论时就没权限往你仓库写 Issue，评论框会转圈圈转到天荒地老。亲身踩过，别问 awa。</p>\n</blockquote>\n<h3 id=\"第-2-步改-next-配置\">第 2 步：改 NexT 配置</h3>\n<p>在 <code>_config.next.yml</code> 里把评论系统切成 utterances，并填上仓库名：</p>\n<figure class=\"highlight yaml\"><table><tbody><tr><td class=\"gutter\"><pre><span class=\"line\">1</span><br><span class=\"line\">2</span><br><span class=\"line\">3</span><br><span class=\"line\">4</span><br><span class=\"line\">5</span><br><span class=\"line\">6</span><br><span class=\"line\">7</span><br><span class=\"line\">8</span><br><span class=\"line\">9</span><br><span class=\"line\">10</span><br><span class=\"line\">11</span><br></pre></td><td class=\"code\"><pre><span class=\"line\"><span class=\"comment\"># 评论系统：Utterances（基于 GitHub Issues，无需任何密钥）</span></span><br><span class=\"line\"><span class=\"attr\">comments:</span></span><br><span class=\"line\">  <span class=\"attr\">style:</span> <span class=\"string\">tabs</span></span><br><span class=\"line\">  <span class=\"attr\">active:</span> <span class=\"string\">utterances</span></span><br><span class=\"line\"></span><br><span class=\"line\"><span class=\"comment\"># Utterances —— 评论存进 X-CODER-ocs/blog 仓库的 Issues</span></span><br><span class=\"line\"><span class=\"attr\">utterances:</span></span><br><span class=\"line\">  <span class=\"attr\">enable:</span> <span class=\"literal\">true</span></span><br><span class=\"line\">  <span class=\"attr\">repo:</span> <span class=\"string\">X-CODER-ocs/blog</span></span><br><span class=\"line\">  <span class=\"attr\">issue_term:</span> <span class=\"string\">pathname</span>        <span class=\"comment\"># 用文章路径作为 issue 标识</span></span><br><span class=\"line\">  <span class=\"attr\">theme:</span> <span class=\"string\">github-light</span>         <span class=\"comment\"># 浅色，与 #4AA26F 主题搭配</span></span><br></pre></td></tr></tbody></table></figure>\n<p>几个字段解释一下：</p>\n<ul>\n<li><code>repo</code>：必须是 <code>用户名/仓库名</code> 的格式，<strong>而且仓库得是 public</strong>，不然 Utterances 读不到 Issues。</li>\n<li><code>issue_term: pathname</code>：用文章的相对路径（比如 <code>/blog/2026/09/04/xxx/</code>）来绑定 Issue。好处是<strong>你改文章标题也不会丢评论</strong>；如果你用 <code>title</code>，哪天手痒改了标题，旧评论就找不回来了，会新建一条空 Issue（别问我怎么知道的qwq）。</li>\n<li><code>theme</code>：评论框配色。我选了 <code>github-light</code> 配博客的浅绿主题，深色模式其实也能用 <code>github-dark</code>，等哪天手痒再切 awa。</li>\n</ul>\n<h3 id=\"第-3-步部署\">第 3 步：部署</h3>\n<figure class=\"highlight bash\"><table><tbody><tr><td class=\"gutter\"><pre><span class=\"line\">1</span><br></pre></td><td class=\"code\"><pre><span class=\"line\">hexo clean &amp;&amp; hexo generate &amp;&amp; hexo deploy</span><br></pre></td></tr></tbody></table></figure>\n<p>刷新页面，文章底部就多出一个用 GitHub 账号登录的评论框了。就这么简单。</p>\n<h2 id=\"几个值得知道的坑和甜头\">几个值得知道的坑（和甜头）</h2>\n<p><strong>坑 1：访客必须有 GitHub 账号。</strong>\n这其实是把双刃剑——门槛劝退了一部分人，但也顺手过滤掉了 90% 的垃圾评论和机器人。对我这种小博客来说，净是好事。</p>\n<p><strong>坑 2：评论 = Issue，别手贱去删。</strong>\n你在仓库 Issues 里看到的每一条「评论帖」，删了页面上对应的评论也没了。整理 Issues 的时候长点心 awa。</p>\n<p><strong>坑 3：permalink 别乱改。</strong>\n因为用的是 <code>issue_term: pathname</code>，文章 URL 一变，评论就「漂」了。所以定好 permalink 之后就别老去动 slug。</p>\n<p><strong>甜头：完全免费 + 可导出。</strong>\nIssues 是标准数据，GitHub 一键导出，哪天想搬家连评论一起搬都行。而且永远不会有「服务商跑路 / 收费」这种破事。</p>\n<p><strong>甜头：自带 Markdown +  emoji。</strong>\n毕竟底层就是 Issues，访客能用完整的 Markdown 写评论，代码块、表格、emoji 全支持，技术博客的评论区就该这样 awa。</p>\n<h2 id=\"结语\">结语</h2>\n<p>接上评论系统之后，这个博客才算真正「活」了——不仅是发，还能听得到回音。Utterances 这套「用 Issues 当数据库」的思路，把静态博客的短板补得干干净净，又没引入任何新负担。</p>\n<p>如果你也在搭 Hexo + NexT 的博客，又不想折腾后端和密钥，强烈建议直接上 Utterances(广?!广?!)。装个 App、改两行配置，十分钟搞定，剩下的交给 GitHub 替你打工 awa~</p>\n<p>有啥想喷的，下面评论区见（记得先登录 GitHub 哈）。</p>\n",
+      "toc": [
+        {
+          "level": 2,
+          "text": "什么是 Utterances",
+          "id": "什么是-utterances"
+        },
+        {
+          "level": 2,
+          "text": "配置步骤（NexT 真就三步）",
+          "id": "配置步骤next-真就三步"
+        },
+        {
+          "level": 3,
+          "text": "第 1 步：给仓库装上 Utterances App",
+          "id": "第-1-步给仓库装上-utterances-app"
+        },
+        {
+          "level": 3,
+          "text": "第 2 步：改 NexT 配置",
+          "id": "第-2-步改-next-配置"
+        },
+        {
+          "level": 3,
+          "text": "第 3 步：部署",
+          "id": "第-3-步部署"
+        },
+        {
+          "level": 2,
+          "text": "几个值得知道的坑（和甜头）",
+          "id": "几个值得知道的坑和甜头"
+        },
+        {
+          "level": 2,
+          "text": "结语",
+          "id": "结语"
+        }
+      ],
+      "categories": [
+        "教程"
+      ],
+      "tags": [
+        "评论系统",
+        "Utterances",
+        "NexT",
+        "Hexo",
+        "博客搭建"
+      ]
+    },
+    {
+      "title": "在华为笔记本上手动装 Arch Linux 踩坑记",
+      "slug": "arch-install-pitfalls",
+      "permalink": "https://x-coder-ocs.github.io/blog/2026/09/04/arch-install-pitfalls/",
+      "date": "2026-09-04T10:00:00.000Z",
+      "updated": "2026-09-04T09:45:34.406Z",
+      "excerpt": "在第一篇之后，我做了一个决定：在我那台华为笔记本上装 Arch Linux，而且要原版、全手动、不靠 archinstall。 结果……archinstall 自己先崩了三次 awa。这篇就记一下这一路踩的坑，省得以后（或者看到的人）再栽。…",
+      "content": "<link rel=\"stylesheet\" class=\"aplayer-secondary-style-marker\" href=\"/blog/assets/css/APlayer.min.css\"><script src=\"/blog/assets/js/APlayer.min.js\" class=\"aplayer-secondary-script-marker\"></script><p>在第一篇之后，我做了一个决定：在我那台华为笔记本上装 Arch Linux，而且要<strong>原版、全手动、不靠 archinstall</strong>。</p>\n<p>结果……archinstall 自己先崩了三次 awa。这篇就记一下这一路踩的坑，省得以后（或者看到的人）再栽。</p>\n<h2 id=\"为什么不用-archinstall\">为什么不用 archinstall</h2>\n<p>archinstall 是官方那个引导式安装器，理论上敲个 <code>archinstall</code> 就能点菜单装完。但它在我的华为本上极其不稳定：</p>\n<ul>\n<li>在「网络连接」那一步直接崩；</li>\n<li>有一次 CPU 被打满，程序自己炸了；</li>\n<li>还有一次卡在「pacman 正在工作」死等。</li>\n</ul>\n<p>查了下，基本是它那个 Python TUI 在资源/网络波动时容易挂。既然崩都在「写盘之前」，硬盘啥都没动，<strong>安全</strong>，但确实浪费时间。</p>\n<p>所以结论：archinstall 在我这不可信，直接走纯手动。手动就是一条条命令顺序跑，没有会崩的菜单，反而更稳。</p>\n<h2 id=\"坑-0secure-boot华为-bios-里的中文菜单\">坑 0：Secure Boot（华为 BIOS 里的中文菜单）</h2>\n<p>华为笔记本用的是 InsydeH2O 定制 BIOS，界面全中文还挺好看。原版 Arch + systemd-boot <strong>默认不支持 Secure Boot</strong>，开着它装完一重启就黑屏报 <code>Invalid signature</code>。</p>\n<p>关掉它（中文界面对照）：</p>\n<table>\n<thead>\n<tr>\n<th>中文显示</th>\n<th>干啥的</th>\n</tr>\n</thead>\n<tbody>\n<tr>\n<td>安全</td>\n<td>通常 Secure Boot 就在这页</td>\n</tr>\n<tr>\n<td>安全启动 / 安全引导</td>\n<td>要关的就是它</td>\n</tr>\n<tr>\n<td>设置管理员密码</td>\n<td>解锁灰色项用</td>\n</tr>\n</tbody>\n</table>\n<p>步骤：进 BIOS（开机狂按 F2）→「安全」→「安全启动」→ 改成「关闭」→ F10 保存。</p>\n<p>如果「安全启动」是灰的点不动，得先「设置管理员密码」解锁，再回来关。</p>\n<blockquote>\n<p>顺手把「启动」里的<strong>快速启动</strong>也关了，不然偶尔会跳过 U 盘引导。</p>\n</blockquote>\n<h2 id=\"坑-1archinstall-的网络菜单会崩--自己先连-wifi\">坑 1：archinstall 的网络菜单会崩 → 自己先连 WiFi</h2>\n<p>archinstall 一启动就问「网络连接找到了，要连吗」，你一点「是」它就崩。正确姿势是<strong>进 archinstall 之前，自己用 iwctl 把网连好(也有可能是我的电脑有点奇怪,好像是CPU满了)</strong>：</p>\n<figure class=\"highlight bash\"><table><tbody><tr><td class=\"gutter\"><pre><span class=\"line\">1</span><br><span class=\"line\">2</span><br><span class=\"line\">3</span><br></pre></td><td class=\"code\"><pre><span class=\"line\">iwctl device list                 <span class=\"comment\"># 看网卡名，比如 wlan0</span></span><br><span class=\"line\">iwctl station wlan0 connect <span class=\"string\">\"WiFi名\"</span></span><br><span class=\"line\">ping -c3 archlinux.org            <span class=\"comment\"># 通了才算数</span></span><br></pre></td></tr></tbody></table></figure>\n<p>连上之后再跑 <code>archinstall</code>，它检测到已经有网，就不会再弹那个会崩的菜单。</p>\n<h2 id=\"坑-2station-command-not-found\">坑 2：<code>station: command not found</code></h2>\n<p>新手最容易懵的一点：<code>station</code> <strong>不是独立命令</strong>，它只在 <code>iwctl</code> 里面才认。你在普通提示符下直接敲 <code>station</code>，bash 当然说找不到。</p>\n<p>要么先 <code>iwctl</code> 进交互模式再敲 <code>station ...</code>，要么直接把 iwctl 当参数跑：</p>\n<figure class=\"highlight bash\"><table><tbody><tr><td class=\"gutter\"><pre><span class=\"line\">1</span><br><span class=\"line\">2</span><br><span class=\"line\">3</span><br></pre></td><td class=\"code\"><pre><span class=\"line\">iwctl station wlan0 scan</span><br><span class=\"line\">iwctl station wlan0 get-networks</span><br><span class=\"line\">iwctl station wlan0 connect <span class=\"string\">\"你的WiFi名\"</span></span><br></pre></td></tr></tbody></table></figure>\n<h2 id=\"坑--3heredoc-里输大写-eof-也不退出原因不明应该吧\">坑 ? 3：heredoc 里输大写 EOF 也不退出（原因不明...应该吧?）</h2>\n<p>我想把国内镜像写进 <code>/etc/pacman.d/mirrorlist</code>，用了：</p>\n<figure class=\"highlight bash\"><table><tbody><tr><td class=\"gutter\"><pre><span class=\"line\">1</span><br><span class=\"line\">2</span><br><span class=\"line\">3</span><br><span class=\"line\">4</span><br><span class=\"line\">5</span><br></pre></td><td class=\"code\"><pre><span class=\"line\"><span class=\"built_in\">cat</span> &gt; /etc/pacman.d/mirrorlist &lt;&lt;<span class=\"string\">'EOF'</span></span><br><span class=\"line\">Server = https://mirrors.tuna.tsinghua.edu.cn/archlinux/<span class=\"variable\">$repo</span>/os/<span class=\"variable\">$arch</span></span><br><span class=\"line\">Server = https://mirrors.ustc.edu.cn/archlinux/<span class=\"variable\">$repo</span>/os/<span class=\"variable\">$arch</span></span><br><span class=\"line\">Server = https://mirrors.aliyun.com/archlinux/<span class=\"variable\">$repo</span>/os/<span class=\"variable\">$arch</span></span><br><span class=\"line\">EOF</span><br></pre></td></tr></tbody></table></figure>\n<p>敲完第一行回车后，shell 进入了 <code>&gt;</code> 等待输入的状态。我确认自己就在这个 heredoc 里、结束符也没打错——<strong>单独一行输大写 <code>EOF</code> 回车</strong>，按理说一定退出。但它就是不退出，打啥都只是回到 <code>&gt;</code> 输入界面。</p>\n<blockquote>\n<p>这事儿挺邪门：正常 bash heredoc 里大写 <code>EOF</code> 单独一行必然结束，我这一步却失效了，具体原因至今没搞明白（可能是当时终端/tty 状态有啥异常）。<strong>如果你也遇到「在 heredoc 里、EOF 打对了也不走」，别硬刚，直接 <code>Ctrl+C</code> 取消最省事。</strong></p>\n</blockquote>\n<p>解法：</p>\n<ul>\n<li>直接 <code>Ctrl+C</code> 取消整个 heredoc，回到干净提示符；</li>\n<li>然后一次性整段粘贴上面的命令，最后用大写 <code>EOF</code> 单独一行收尾（我后来重跑一次就正常了，可能只是那次终端抽风）。</li>\n</ul>\n<blockquote>\n<p>提醒：<code>&lt;&lt;'EOF'</code> 里的 <code>$repo</code> <code>$arch</code> 是 pacman 的占位符，<strong>原样保留，别手改成别的字</strong>。</p>\n</blockquote>\n<h2 id=\"坑-4国内镜像在中国装-arch-的命脉\">坑 4：国内镜像（在中国装 Arch 的命脉）</h2>\n<p>默认的世界镜像列表 <code>pacman -Sy</code> 其实能通（只拉几个数据库文件，慢一点你感觉不到）。但接下来 <code>pacstrap</code> 要下载 <strong>1GB+ 的包</strong>，用世界源速度可能只有几十 KB/s，还容易超时断掉。</p>\n<p>所以装系统这步，换中国源是刚需。直接覆盖写：</p>\n<figure class=\"highlight bash\"><table><tbody><tr><td class=\"gutter\"><pre><span class=\"line\">1</span><br><span class=\"line\">2</span><br><span class=\"line\">3</span><br><span class=\"line\">4</span><br><span class=\"line\">5</span><br><span class=\"line\">6</span><br></pre></td><td class=\"code\"><pre><span class=\"line\"><span class=\"built_in\">cat</span> &gt; /etc/pacman.d/mirrorlist &lt;&lt;<span class=\"string\">'EOF'</span></span><br><span class=\"line\">Server = https://mirrors.tuna.tsinghua.edu.cn/archlinux/<span class=\"variable\">$repo</span>/os/<span class=\"variable\">$arch</span></span><br><span class=\"line\">Server = https://mirrors.ustc.edu.cn/archlinux/<span class=\"variable\">$repo</span>/os/<span class=\"variable\">$arch</span></span><br><span class=\"line\">Server = https://mirrors.aliyun.com/archlinux/<span class=\"variable\">$repo</span>/os/<span class=\"variable\">$arch</span></span><br><span class=\"line\">EOF</span><br><span class=\"line\">pacman -Sy</span><br></pre></td></tr></tbody></table></figure>\n<p>⚠️ <strong>live 镜像每次重启都是全新的</strong>：之前连的 WiFi、设的国内源全没了，得重来一遍。所以重启后第一件事就是重连网 + 重写镜像。</p>\n<h2 id=\"坑-5nvme-分区名带-p\">坑 5：NVMe 分区名带 <code>p</code></h2>\n<p>华为本的内置盘是 NVMe，设备名是 <code>/dev/nvme0n1</code>。注意分区名带个 <strong><code>p</code></strong>：</p>\n<ul>\n<li>分区1（EFI）：<code>/dev/nvme0n1p1</code></li>\n<li>分区2（根）：<code>/dev/nvme0n1p2</code></li>\n</ul>\n<p>不像 SATA 那样是 <code>sda1</code>/<code>sda2</code>。后面格式化和挂载时别写错。</p>\n<p>分区（fdisk 里）：</p>\n<figure class=\"highlight plaintext\"><table><tbody><tr><td class=\"gutter\"><pre><span class=\"line\">1</span><br><span class=\"line\">2</span><br><span class=\"line\">3</span><br><span class=\"line\">4</span><br><span class=\"line\">5</span><br></pre></td><td class=\"code\"><pre><span class=\"line\">g            ← 新建 GPT（清空整盘）</span><br><span class=\"line\">n            ← 分区1：默认号 → 默认起点 → +1G（EFI 大小）</span><br><span class=\"line\">t            ← 改类型：1 → ef00（EFI System）</span><br><span class=\"line\">n            ← 分区2：默认 → 默认 → 回车占满剩余（根）</span><br><span class=\"line\">w            ← 保存退出</span><br></pre></td></tr></tbody></table></figure>\n<p>EFI 那步问大小，填 <strong><code>+1G</code></strong>（加号不能省，表示按大小分）。</p>\n<h2 id=\"坑-6重启-live-镜像后挂载丢了\">坑 6：重启 live 镜像后挂载丢了</h2>\n<p>你重启过 live 镜像，挂载会丢。pacstrap 之前必须确认挂上了：</p>\n<figure class=\"highlight bash\"><table><tbody><tr><td class=\"gutter\"><pre><span class=\"line\">1</span><br><span class=\"line\">2</span><br><span class=\"line\">3</span><br><span class=\"line\">4</span><br><span class=\"line\">5</span><br><span class=\"line\">6</span><br></pre></td><td class=\"code\"><pre><span class=\"line\">fdisk -l /dev/nvme0n1        <span class=\"comment\"># 看分区是否还在（之前 w 存过就会在）</span></span><br><span class=\"line\">mkfs.fat -F32 /dev/nvme0n1p1</span><br><span class=\"line\">mkfs.ext4 /dev/nvme0n1p2</span><br><span class=\"line\">mount /dev/nvme0n1p2 /mnt</span><br><span class=\"line\"><span class=\"built_in\">mkdir</span> -p /mnt/boot &amp;&amp; mount /dev/nvme0n1p1 /mnt/boot</span><br><span class=\"line\">mount | grep /mnt            <span class=\"comment\"># 应显示 /mnt 和 /mnt/boot 两行</span></span><br></pre></td></tr></tbody></table></figure>\n<p>确认挂载没问题，再跑 pacstrap：</p>\n<figure class=\"highlight bash\"><table><tbody><tr><td class=\"gutter\"><pre><span class=\"line\">1</span><br><span class=\"line\">2</span><br><span class=\"line\">3</span><br></pre></td><td class=\"code\"><pre><span class=\"line\">pacstrap /mnt base linux linux-firmware linux-headers base-devel vim networkmanager</span><br><span class=\"line\">pacstrap /mnt intel-ucode    <span class=\"comment\"># 华为多是 Intel CPU；AMD 换 amd-ucode</span></span><br><span class=\"line\">genfstab -U /mnt &gt;&gt; /mnt/etc/fstab</span><br></pre></td></tr></tbody></table></figure>\n<h2 id=\"顺便别把-unstable--live-镜像-直接使用安装后-作为生产环境使用\">顺便：别把 unstable / live 镜像 直接使用/安装后 作为生产环境使用</h2>\n<p>这次装机是从 KDE Neon 转过来的——Neon 的<strong>开发版 ISO</strong> 安装器（Calamares）在某个构建上有脚本 bug，直接 Runtime error 崩了,我懒得弄就换镜像了。提醒:普通用户装系统用 stable，别下开发版。而且我<strong>不怎么用 live 桌面镜像</strong>，Arch 那个最小 ISO 启动后是个纯命令行 shell，正好合适。</p>\n<h2 id=\"小结\">小结</h2>\n<table>\n<thead>\n<tr>\n<th>坑</th>\n<th>一句话</th>\n</tr>\n</thead>\n<tbody>\n<tr>\n<td>Secure Boot 没关</td>\n<td>装完黑屏报 Invalid signature</td>\n</tr>\n<tr>\n<td>archinstall 网络菜单</td>\n<td>自己先 iwctl 连网，别点它的「连接」</td>\n</tr>\n<tr>\n<td><code>station</code> 找不到</td>\n<td>它在 iwctl 里面，或 <code>iwctl station ...</code></td>\n</tr>\n<tr>\n<td>heredoc 退不出</td>\n<td>在 heredoc 里输大写 <code>EOF</code> 也不走（原因不明），直接 <code>Ctrl+C</code> 退最稳</td>\n</tr>\n<tr>\n<td>世界镜像</td>\n<td>能通但 pacstrap 慢，换中国源</td>\n</tr>\n<tr>\n<td>live 重启</td>\n<td>网络 + 镜像全清空，重来</td>\n</tr>\n<tr>\n<td>NVMe 命名</td>\n<td>分区是 <code>nvme0n1p1</code>/<code>p2</code>，带 p</td>\n</tr>\n<tr>\n<td>重启丢挂载</td>\n<td>pacstrap 前重挂 /mnt 和 /mnt/boot</td>\n</tr>\n</tbody>\n</table>\n<p>装系统这事儿，手动虽然步骤多，但每一步看得见、可控，比那个动不动就炸的菜单省心多了 awa。</p>\n",
+      "toc": [
+        {
+          "level": 2,
+          "text": "为什么不用 archinstall",
+          "id": "为什么不用-archinstall"
+        },
+        {
+          "level": 2,
+          "text": "坑 0：Secure Boot（华为 BIOS 里的中文菜单）",
+          "id": "坑-0secure-boot华为-bios-里的中文菜单"
+        },
+        {
+          "level": 2,
+          "text": "坑 1：archinstall 的网络菜单会崩 → 自己先连 WiFi",
+          "id": "坑-1archinstall-的网络菜单会崩--自己先连-wifi"
+        },
+        {
+          "level": 2,
+          "text": "坑 2：station: command not found",
+          "id": "坑-2station-command-not-found"
+        },
+        {
+          "level": 2,
+          "text": "坑 ? 3：heredoc 里输大写 EOF 也不退出（原因不明...应该吧?）",
+          "id": "坑--3heredoc-里输大写-eof-也不退出原因不明应该吧"
+        },
+        {
+          "level": 2,
+          "text": "坑 4：国内镜像（在中国装 Arch 的命脉）",
+          "id": "坑-4国内镜像在中国装-arch-的命脉"
+        },
+        {
+          "level": 2,
+          "text": "坑 5：NVMe 分区名带 p",
+          "id": "坑-5nvme-分区名带-p"
+        },
+        {
+          "level": 2,
+          "text": "坑 6：重启 live 镜像后挂载丢了",
+          "id": "坑-6重启-live-镜像后挂载丢了"
+        },
+        {
+          "level": 2,
+          "text": "顺便：别把 unstable / live 镜像 直接使用/安装后 作为生产环境使用",
+          "id": "顺便别把-unstable--live-镜像-直接使用安装后-作为生产环境使用"
+        },
+        {
+          "level": 2,
+          "text": "小结",
+          "id": "小结"
+        }
+      ],
+      "categories": [
+        "教程"
+      ],
+      "tags": [
+        "Arch Linux",
+        "手动安装",
+        "笔记本",
+        "运维和搞机"
+      ]
+    },
+    {
+      "title": "Hello, X-CODER",
+      "slug": "hello-xcoder",
+      "permalink": "https://x-coder-ocs.github.io/blog/2026/09/03/hello-xcoder/",
+      "date": "2026-09-03T12:00:00.000Z",
+      "updated": "2026-09-03T12:42:30.001Z",
+      "excerpt": "第一篇博客，记录了一些使用方法。 这个博客是什么 X-CODER(我)的技术博客。用于记录我的故事awa。 技术栈 组件 说明 Hexo 静态博客生成器，Node.js 生态，Markdown 直接写 NexT 主题，Gemini 方案 G…",
+      "content": "<link rel=\"stylesheet\" class=\"aplayer-secondary-style-marker\" href=\"/blog/assets/css/APlayer.min.css\"><script src=\"/blog/assets/js/APlayer.min.js\" class=\"aplayer-secondary-script-marker\"></script><p>第一篇博客，记录了一些使用方法。</p>\n<h2 id=\"这个博客是什么\">这个博客是什么</h2>\n<p>X-CODER(我)的技术博客。用于记录我的故事awa。</p>\n<h2 id=\"技术栈\">技术栈</h2>\n<table>\n<thead>\n<tr>\n<th>组件</th>\n<th>说明</th>\n</tr>\n</thead>\n<tbody>\n<tr>\n<td><a href=\"https://hexo.io/\">Hexo</a></td>\n<td>静态博客生成器，Node.js 生态，Markdown 直接写</td>\n</tr>\n<tr>\n<td><a href=\"https://theme-next.js.org/\">NexT</a></td>\n<td>主题，Gemini 方案</td>\n</tr>\n<tr>\n<td>GitHub Actions</td>\n<td>推送到 main 分支后自动构建并发布到 GitHub Pages</td>\n</tr>\n</tbody>\n</table>\n<h2 id=\"工作流\">工作流</h2>\n<p>写文章只需要三步：</p>\n<figure class=\"highlight bash\"><table><tbody><tr><td class=\"gutter\"><pre><span class=\"line\">1</span><br><span class=\"line\">2</span><br><span class=\"line\">3</span><br><span class=\"line\">4</span><br><span class=\"line\">5</span><br><span class=\"line\">6</span><br><span class=\"line\">7</span><br><span class=\"line\">8</span><br></pre></td><td class=\"code\"><pre><span class=\"line\"><span class=\"comment\"># 1. 新建文章</span></span><br><span class=\"line\">hexo new post <span class=\"string\">\"文章标题\"</span></span><br><span class=\"line\"></span><br><span class=\"line\"><span class=\"comment\"># 2. 本地预览</span></span><br><span class=\"line\">hexo server</span><br><span class=\"line\"></span><br><span class=\"line\"><span class=\"comment\"># 3. 提交后自动发布</span></span><br><span class=\"line\">git add . &amp;&amp; git commit -m <span class=\"string\">\"feat: new post\"</span> &amp;&amp; git push</span><br></pre></td></tr></tbody></table></figure>\n<p>推送到 <code>main</code> 之后，GitHub Actions 会跑 <code>hexo generate</code> 并把 <code>public/</code> 发布到 Pages，全程不用手动介入。</p>\n<h2 id=\"常用命令\">常用命令</h2>\n<figure class=\"highlight bash\"><table><tbody><tr><td class=\"gutter\"><pre><span class=\"line\">1</span><br><span class=\"line\">2</span><br><span class=\"line\">3</span><br><span class=\"line\">4</span><br><span class=\"line\">5</span><br></pre></td><td class=\"code\"><pre><span class=\"line\">hexo clean          <span class=\"comment\"># 清理缓存和已生成的静态文件</span></span><br><span class=\"line\">hexo g              <span class=\"comment\"># generate，生成静态文件</span></span><br><span class=\"line\">hexo s              <span class=\"comment\"># server，本地预览 http://localhost:4000</span></span><br><span class=\"line\">hexo new draft <span class=\"string\">\"x\"</span>  <span class=\"comment\"># 新建草稿</span></span><br><span class=\"line\">hexo publish <span class=\"string\">\"x\"</span>    <span class=\"comment\"># 草稿转正式文章</span></span><br></pre></td></tr></tbody></table></figure>\n",
+      "toc": [
+        {
+          "level": 2,
+          "text": "这个博客是什么",
+          "id": "这个博客是什么"
+        },
+        {
+          "level": 2,
+          "text": "技术栈",
+          "id": "技术栈"
+        },
+        {
+          "level": 2,
+          "text": "工作流",
+          "id": "工作流"
+        },
+        {
+          "level": 2,
+          "text": "常用命令",
+          "id": "常用命令"
+        }
+      ],
+      "categories": [
+        "随笔"
+      ],
+      "tags": [
+        "Hexo",
+        "建站",
+        "GitHub Action"
+      ]
+    }
+  ],
+  "categories": [
+    {
+      "name": "教程",
+      "slug": "教程",
+      "count": 3
+    },
+    {
+      "name": "随笔",
+      "slug": "随笔",
+      "count": 1
+    }
+  ],
+  "tags": [
+    {
+      "name": "Hexo",
+      "slug": "Hexo",
+      "count": 3
+    },
+    {
+      "name": "博客搭建",
+      "slug": "博客搭建",
+      "count": 2
+    },
+    {
+      "name": "GitHub Actions",
+      "slug": "GitHub Actions",
+      "count": 1
+    },
+    {
+      "name": "SEO",
+      "slug": "SEO",
+      "count": 1
+    },
+    {
+      "name": "搜索引擎收录",
+      "slug": "搜索引擎收录",
+      "count": 1
+    },
+    {
+      "name": "评论系统",
+      "slug": "评论系统",
+      "count": 1
+    },
+    {
+      "name": "Utterances",
+      "slug": "Utterances",
+      "count": 1
+    },
+    {
+      "name": "NexT",
+      "slug": "NexT",
+      "count": 1
+    },
+    {
+      "name": "Arch Linux",
+      "slug": "Arch Linux",
+      "count": 1
+    },
+    {
+      "name": "手动安装",
+      "slug": "手动安装",
+      "count": 1
+    },
+    {
+      "name": "笔记本",
+      "slug": "笔记本",
+      "count": 1
+    },
+    {
+      "name": "运维和搞机",
+      "slug": "运维和搞机",
+      "count": 1
+    },
+    {
+      "name": "建站",
+      "slug": "建站",
+      "count": 1
+    },
+    {
+      "name": "GitHub Action",
+      "slug": "GitHub Action",
+      "count": 1
+    }
+  ],
+  "archives": [
+    {
+      "year": 2026,
+      "count": 4,
+      "months": [
+        {
+          "month": 9,
+          "count": 4
+        }
+      ]
+    }
+  ]
+}

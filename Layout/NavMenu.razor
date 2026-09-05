@@ -1,0 +1,165 @@
+﻿@using Microsoft.FluentUI.AspNetCore.Components
+@using FluentNext.Frontend
+@using FluentNext.Frontend.Services
+@implements IDisposable
+@inject ContentService Content
+@inject NavigationManager Nav
+@inject AppState AppState
+@inject GitHubAuth GitHub
+@inject IJSRuntime JS
+
+<div class="fn-navmenu">
+    @if (_isArticle && _post is not null)
+    {
+        @* 文章页：侧边栏显示「文章目录」（TOC） *@
+        <div class="fn-toc">
+            <div class="fn-toc-head">文章目录</div>
+            @if (_post.Toc.Count == 0)
+            {
+                <p class="fn-muted fn-toc-empty">本文暂无小标题</p>
+            }
+            else
+            {
+                @foreach (var item in _post.Toc)
+                {
+                    <a class="@("fn-toc-item fn-toc-l" + item.Level)"
+                       href="@("#" + item.Id)"
+                       @onclick="() => ScrollTo(item.Id)"
+                       @onclick:preventDefault
+                       title="@item.Text">@item.Text</a>
+                }
+            }
+            <div class="fn-toc-foot">
+                <FluentButton Appearance="Appearance.Lightweight" OnClick="BackToTop" Style="width:100%">回到顶部 ↑</FluentButton>
+            </div>
+        </div>
+    }
+    else
+    {
+        @* 普通页：侧边栏显示「网站目录」 *@
+        <FluentNavMenu Title="@_title">
+            @* 首页用 All 精确匹配，否则 Prefix 会让它在任何 / 路径下都高亮 *@
+            <FluentNavLink Href="/" Match="NavLinkMatch.All">首页</FluentNavLink>
+
+            <FluentNavGroup Title="分类" Expanded="_isCategoryRoute">
+                @foreach (var c in _categories)
+                {
+                    <FluentNavLink Href="@("/category/" + Uri.EscapeDataString(c.Slug))">@c.Name <span class="fn-count">@c.Count</span></FluentNavLink>
+                }
+            </FluentNavGroup>
+
+            <FluentNavGroup Title="标签" Expanded="_isTagRoute">
+                @foreach (var t in _tags)
+                {
+                    <FluentNavLink Href="@("/tag/" + Uri.EscapeDataString(t.Slug))">@t.Name <span class="fn-count">@t.Count</span></FluentNavLink>
+                }
+            </FluentNavGroup>
+
+            <FluentNavLink Href="/archive">归档</FluentNavLink>
+            <FluentNavLink Href="/about">关于</FluentNavLink>
+        </FluentNavMenu>
+    }
+
+    @* 分割线下：统一 GitHub 登录（驱动评论）+ 设置按钮；任何侧边栏都有 *@
+    @if (GitHub.IsGitalk)
+    {
+        <div class="fn-navfoot">
+            <FluentDivider />
+            @if (GitHub.IsLoggedIn && GitHub.User is not null)
+            {
+                <div class="fn-gh-user">
+                    <img class="fn-gh-avatar" src="@GitHub.User.AvatarUrl" alt="avatar" />
+                    <div class="fn-gh-meta">
+                        <span class="fn-gh-name">@GitHub.User.Login</span>
+                        <a href="@GitHub.User.HtmlUrl" target="_blank" rel="noopener" class="fn-gh-profile">GitHub 主页 ↗</a>
+                    </div>
+                    <FluentButton Appearance="Appearance.Lightweight" OnClick="Logout" Style="width:100%">退出登录</FluentButton>
+                </div>
+            }
+            else
+            {
+                <button type="button" class="fn-gh-login" @onclick="Login" title="登录 GitHub 后即可在文章页用 Gitalk 评论">
+                    <svg class="fn-gh-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"></path></svg>
+                    <span>通过 GitHub 登录</span>
+                </button>
+            }
+            <FluentButton Appearance="Appearance.Accent" OnClick="OpenSettings" Style="width:100%">设置</FluentButton>
+        </div>
+    }
+</div>
+
+@code {
+    private string _title = "X-CODER";
+    private List<CategoryInfo> _categories = new();
+    private List<TagInfo> _tags = new();
+    private bool _isArticle;
+    private bool _isCategoryRoute;
+    private bool _isTagRoute;
+    private BlogPost? _post;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var data = await Content.GetContentAsync();
+        if (!string.IsNullOrEmpty(data.Site.Title)) _title = data.Site.Title;
+        _categories = data.Categories;
+        _tags = data.Tags;
+        await RefreshArticleState(data);
+    }
+
+    protected override void OnInitialized()
+    {
+        Nav.LocationChanged += OnLocationChanged;
+        GitHub.Changed += OnGitHubChanged;
+    }
+
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
+        => _ = RefreshArticleState();
+
+    private void OnGitHubChanged() => _ = InvokeAsync(StateHasChanged);
+
+    private async Task RefreshArticleState(ContentData? data = null)
+    {
+        data ??= await Content.GetContentAsync();
+        var path = Nav.ToBaseRelativePath(Nav.Uri).Trim('/');
+        _isCategoryRoute = path.StartsWith("category/", StringComparison.OrdinalIgnoreCase);
+        _isTagRoute = path.StartsWith("tag/", StringComparison.OrdinalIgnoreCase);
+        var slug = CurrentSlug(path);
+        if (slug is not null)
+        {
+            _isArticle = true;
+            _post = data.Posts.FirstOrDefault(p => p.Slug == slug);
+        }
+        else
+        {
+            _isArticle = false;
+            _post = null;
+        }
+        await InvokeAsync(StateHasChanged);
+    }
+
+    /// <summary>从当前 URL 解析 /post/{slug}；部署在子路径（/blog/）下也能正确截取</summary>
+    private string? CurrentSlug(string? path = null)
+    {
+        path ??= Nav.ToBaseRelativePath(Nav.Uri).Trim('/');
+        if (path.StartsWith("post/", StringComparison.OrdinalIgnoreCase))
+            return path.Substring(5).Trim('/');
+        return null;
+    }
+
+    private async Task ScrollTo(string id)
+        => await JS.InvokeVoidAsync("fluentNextScrollTo", id);
+
+    private async Task BackToTop()
+        => await JS.InvokeVoidAsync("fluentNextScrollTo", "__top__");
+
+    private void OpenSettings() => AppState.RequestOpenSettings();
+
+    private async Task Login() => await GitHub.LoginAsync();
+    private async Task Logout() => await GitHub.LogoutAsync();
+
+    public void Dispose()
+    {
+        Nav.LocationChanged -= OnLocationChanged;
+        GitHub.Changed -= OnGitHubChanged;
+    }
+}

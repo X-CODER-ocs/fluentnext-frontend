@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FluentNext</title>
+    <base href="/" />
+    <link rel="preload" id="webassembly" />
+    <link rel="stylesheet" href="css/app.css" />
+    <link rel="stylesheet" href="_content/Microsoft.FluentUI.AspNetCore.Components/css/reboot.css" />
+    <link rel="icon" type="image/png" href="favicon.png" />
+    <link href="FluentNext.Frontend.styles.css" rel="stylesheet" />
+    <script type="importmap"></script>
+    <style>
+        /* 开屏临界样式：在 app.css 加载前就先生效，避免白屏闪烁 */
+        html, body { margin: 0; height: 100%; }
+        #app:empty::after { content: ""; }
+        .fn-splash {
+            position: fixed; inset: 0; display: flex; flex-direction: column;
+            align-items: center; justify-content: center; gap: 1.1rem;
+            background: #fafafa;
+        }
+        .fn-splash-logo { font-size: 2rem; font-weight: 700; letter-spacing: .5px; color: #242424; }
+        .fn-splash-logo span { color: #4AA26F; }
+        .fn-splash-spinner {
+            width: 42px; height: 42px; border-radius: 50%;
+            border: 4px solid rgba(74,162,111,.25); border-top-color: #4AA26F;
+            animation: fn-spin .8s linear infinite;
+        }
+        .fn-splash-text { color: #6b6b6b; font-size: .9rem; }
+        @keyframes fn-spin { to { transform: rotate(360deg); } }
+        @media (prefers-color-scheme: dark) {
+            .fn-splash { background: #1f1f1f; }
+            .fn-splash-logo { color: #f3f3f3; }
+            .fn-splash-text { color: #b8b8b8; }
+        }
+    </style>
+</head>
+
+<body>
+    <div id="app">
+        <div class="fn-splash">
+            <div class="fn-splash-logo">Fluent<span>Next</span></div>
+            <div class="fn-splash-spinner" aria-hidden="true"></div>
+            <div class="fn-splash-text">正在加载…</div>
+        </div>
+    </div>
+
+    <div id="blazor-error-ui">
+        <div class="fn-err-card">
+            <strong>页面出现了一点小问题</strong>
+            <span class="fn-err-msg">FluentNext 渲染时遇到未处理的异常。</span>
+            <span class="fn-err-actions">
+                <a href="." class="reload">重新加载</a>
+                <span class="dismiss">关闭 ✕</span>
+            </span>
+        </div>
+    </div>
+
+    <!-- Fluent UI Web Components 脚本：必须同步（按顺序）加载，
+         且要先于 Blazor，否则 FluentNavMenu 等组件渲染时 WC 尚未注册，
+         会对 ElementReference 调 addEventListener 而抛 “An unhandled error”。 -->
+    <script src="_content/Microsoft.FluentUI.AspNetCore.Components/Microsoft.FluentUI.AspNetCore.Components.lib.module.js" type="module"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/comments.js"></script>
+    <script src="_framework/blazor.webassembly.js"></script>
+</body>
+
+</html>

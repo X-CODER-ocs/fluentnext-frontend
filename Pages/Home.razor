@@ -1,0 +1,31 @@
+﻿@page "/"
+@using FluentNext.Frontend.Services
+@using FluentNext.Frontend.Components
+@inject ContentService Content
+
+<PageTitle>@(_siteTitle)</PageTitle>
+
+<div class="fn-home">
+    @if (_loading)
+    {
+        <p class="fn-muted">加载中…</p>
+    }
+    else
+    {
+        <PostList Posts="_posts" />
+    }
+</div>
+
+@code {
+    private List<BlogPost> _posts = new();
+    private bool _loading = true;
+    private string _siteTitle = "X-CODER";
+
+    protected override async Task OnInitializedAsync()
+    {
+        var data = await Content.GetContentAsync();
+        _siteTitle = string.IsNullOrEmpty(data.Site.Title) ? "X-CODER" : data.Site.Title;
+        _posts = data.Posts.OrderByDescending(p => p.Date).ToList();
+        _loading = false;
+    }
+}

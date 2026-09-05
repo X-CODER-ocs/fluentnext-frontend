@@ -1,0 +1,104 @@
+﻿@inherits LayoutComponentBase
+@using Microsoft.FluentUI.AspNetCore.Components
+@using FluentNext.Frontend.Services
+@inject ClientSettings ClientSettings
+@inject IOptions<FluentNextConfig> Config
+@inject ContentService Content
+@inject AppState AppState
+@inject GitHubAuth GitHub
+@implements IDisposable
+
+@* 组件 Provider（Toast / Tooltip / MessageBar / Menu）*@
+<FluentToastProvider />
+<FluentTooltipProvider />
+<FluentMessageBarProvider />
+<FluentMenuProvider />
+
+<div class="fn-app">
+    <NavMenu />
+    <main class="fn-main">
+        <header class="fn-topbar">
+            <span class="fn-brand">@(_siteTitle)</span>
+        </header>
+        <div class="fn-body" style="font-size:@(ClientSettings.Data.FontSize)px">
+            @Body
+        </div>
+    </main>
+</div>
+
+@if (_showSettings)
+{
+    <div class="fn-backdrop" @onclick="ToggleSettings"></div>
+    <aside class="fn-drawer">
+        <div class="fn-drawer-head">
+            <strong>外观设置</strong>
+            <FluentButton Appearance="Appearance.Lightweight" OnClick="ToggleSettings">关闭</FluentButton>
+        </div>
+
+        <div class="fn-field">
+            <label>布局</label>
+            <FluentSelect TOption="string" Value="@ClientSettings.Data.Layout" ValueChanged="OnLayoutChanged">
+                <FluentOption TOption="string" Value="list">列表（仅标题）</FluentOption>
+                <FluentOption TOption="string" Value="magazine">杂志（含内容）</FluentOption>
+            </FluentSelect>
+        </div>
+
+        <div class="fn-field">
+            <label>主题</label>
+            <FluentSelect TOption="string" Value="@ClientSettings.Data.Theme" ValueChanged="OnThemeChanged">
+                <FluentOption TOption="string" Value="Light">浅色</FluentOption>
+                <FluentOption TOption="string" Value="Dark">深色</FluentOption>
+                <FluentOption TOption="string" Value="System">跟随系统</FluentOption>
+            </FluentSelect>
+        </div>
+
+        <div class="fn-field">
+            <label>正文字号：@(ClientSettings.Data.FontSize)px</label>
+            <FluentSlider @bind-Value="FontSize" Min="14" Max="22" Step="1" />
+        </div>
+
+        <p class="fn-hint">设置保存在本浏览器，不同设备 / 不同观看者互不影响。</p>
+    </aside>
+}
+
+@code {
+    private bool _showSettings;
+    private string _siteTitle = "X-CODER";
+
+    protected override async Task OnInitializedAsync()
+    {
+        var data = await Content.GetContentAsync();
+        if (!string.IsNullOrEmpty(data.Site.Title)) _siteTitle = data.Site.Title;
+        AppState.SettingsOpenRequested += OnSettingsRequested;
+        // 完成可能挂起的 GitHub OAuth 回调（URL 带 ?code= 时换 token + 拉账户）
+        await GitHub.InitAsync();
+    }
+
+    private void OnSettingsRequested()
+    {
+        _showSettings = true;
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private void ToggleSettings() => _showSettings = !_showSettings;
+
+    private async Task OnLayoutChanged(string value)
+    {
+        ClientSettings.SetLayout(value);
+        await ClientSettings.SaveAsync();
+    }
+
+    private async Task OnThemeChanged(string value)
+    {
+        ClientSettings.SetTheme(value);
+        await ClientSettings.SaveAsync();
+    }
+
+    private int FontSize
+    {
+        get => ClientSettings.Data.FontSize;
+        set { ClientSettings.SetFontSize(value); _ = ClientSettings.SaveAsync(); }
+    }
+
+    public void Dispose() => AppState.SettingsOpenRequested -= OnSettingsRequested;
+}

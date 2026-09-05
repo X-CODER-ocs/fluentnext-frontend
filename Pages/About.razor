@@ -1,0 +1,25 @@
+@page "/about"
+@using FluentNext.Frontend.Services
+@inject ContentService Content
+
+<PageTitle>关于</PageTitle>
+
+<div class="fn-home fn-about">
+    <a href="/" class="fn-back">← 首页</a>
+    <h1>关于</h1>
+    <div class="fn-post-content fn-markdown">
+        <p>@(_desc)</p>
+        <p>本博客使用 <strong>FluentNext</strong> 主题：前端为 Blazor WebAssembly + Fluent UI Blazor（真·Fluent 组件），后端为 Hexo 负责产出内容数据（<code>api/content.json</code>）。</p>
+        <p>布局、主题与字号等观感设置保存在你自己的浏览器中，不同设备、不同观看者互不影响。</p>
+    </div>
+</div>
+
+@code {
+    private string _desc = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        var data = await Content.GetContentAsync();
+        _desc = data.Site.Description;
+    }
+}

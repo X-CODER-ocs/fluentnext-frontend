@@ -1,0 +1,79 @@
+@page "/post/{slug}"
+@using Microsoft.FluentUI.AspNetCore.Components
+@using FluentNext.Frontend.Services
+@inject ContentService Content
+@inject IOptions<FluentNextConfig> Config
+@inject IJSRuntime JS
+
+<PageTitle>@(_post?.Title ?? "文章")</PageTitle>
+
+@if (_post is null)
+{
+    <p class="fn-muted">文章不存在或尚未生成。</p>
+}
+else
+{
+    <article class="fn-article">
+        <a href="/" class="fn-back">← 返回首页</a>
+        <h1>@_post.Title</h1>
+        <div class="fn-post-meta">
+            <span>@_post.Date.ToString("yyyy-MM-dd")</span>
+            @foreach (var c in _post.Categories)
+            {
+                <FluentBadge Appearance="Appearance.Accent" Class="fn-cat">@c</FluentBadge>
+            }
+            @foreach (var t in _post.Tags)
+            {
+                <FluentBadge Class="fn-tag">#@t</FluentBadge>
+            }
+        </div>
+        <div class="fn-post-content fn-markdown">
+            @((MarkupString)_post.Content)
+        </div>
+        <section id="fn-comments" class="fn-comments">
+            <h3 class="fn-comments-title">💬 评论</h3>
+            <p class="fn-comments-hint">评论由 GitHub Issues 驱动（Gitalk）。先在侧边栏点「通过 GitHub 登录」，即可在此发表评论。仓库：<code>X-CODER-ocs/blog</code>。</p>
+        </section>
+    </article>
+}
+
+@code {
+    [Parameter] public string Slug { get; set; } = "";
+
+    private BlogPost? _post;
+    private string? _lastCommentSlug;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var data = await Content.GetContentAsync();
+        _post = data.Posts.FirstOrDefault(p => p.Slug == Slug);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // 文章变化时（含首次）重新加载对应评论
+        if (_post is not null && _post.Slug != _lastCommentSlug)
+        {
+            _lastCommentSlug = _post.Slug;
+            await JS.InvokeVoidAsync("fluentNextResetComments");
+            var c = Config.Value.Comments;
+            await JS.InvokeVoidAsync("fluentNextInitComments", new
+            {
+                provider = c.Provider,
+                repo = c.Utterances.Repo,
+                issueTerm = c.Utterances.IssueTerm,
+                label = c.Utterances.Label,
+                gitalk = new
+                {
+                    clientID = c.Gitalk.ClientID,
+                    clientSecret = c.Gitalk.ClientSecret,
+                    repo = c.Gitalk.Repo,
+                    owner = c.Gitalk.Owner,
+                    admin = c.Gitalk.Admin
+                },
+                slug = _post.Slug,
+                title = _post.Title
+            });
+        }
+    }
+}
