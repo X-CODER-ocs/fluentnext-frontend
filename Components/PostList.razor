@@ -15,7 +15,7 @@ else if (ClientSettings.Data.Layout == "list")
         @foreach (var p in Posts)
         {
             <li class="fn-list-item">
-                <a href="@($"/post/{p.Slug}")" class="fn-list-title">@p.Title</a>
+                <a href="@($"post/{p.Slug}")" class="fn-list-title">@p.Title</a>
                 <span class="fn-list-date">@p.Date.ToString("yyyy-MM-dd")</span>
             </li>
         }
@@ -35,11 +35,11 @@ else
                         <FluentBadge Appearance="Appearance.Accent" Class="fn-cat">@c</FluentBadge>
                     }
                 </div>
-                <a href="@($"/post/{p.Slug}")" class="fn-post-title">@p.Title</a>
+                <a href="@($"post/{p.Slug}")" class="fn-post-title">@p.Title</a>
                 <div class="fn-post-content fn-markdown">
                     @((MarkupString)(string.IsNullOrEmpty(p.Content) ? p.Excerpt : p.Content))
                 </div>
-                <a href="@($"/post/{p.Slug}")" class="fn-readmore">阅读全文 →</a>
+                <a href="@($"post/{p.Slug}")" class="fn-readmore">阅读全文 →</a>
             </FluentCard>
         }
     </div>

@@ -39,24 +39,24 @@
         @* 普通页：侧边栏显示「网站目录」 *@
         <FluentNavMenu Title="@_title">
             @* 首页用 All 精确匹配，否则 Prefix 会让它在任何 / 路径下都高亮 *@
-            <FluentNavLink Href="/" Match="NavLinkMatch.All">首页</FluentNavLink>
+            <FluentNavLink Href="./" Match="NavLinkMatch.All">首页</FluentNavLink>
 
             <FluentNavGroup Title="分类" Expanded="_isCategoryRoute">
                 @foreach (var c in _categories)
                 {
-                    <FluentNavLink Href="@("/category/" + Uri.EscapeDataString(c.Slug))">@c.Name <span class="fn-count">@c.Count</span></FluentNavLink>
+                    <FluentNavLink Href="@("category/" + Uri.EscapeDataString(c.Slug))">@c.Name <span class="fn-count">@c.Count</span></FluentNavLink>
                 }
             </FluentNavGroup>
 
             <FluentNavGroup Title="标签" Expanded="_isTagRoute">
                 @foreach (var t in _tags)
                 {
-                    <FluentNavLink Href="@("/tag/" + Uri.EscapeDataString(t.Slug))">@t.Name <span class="fn-count">@t.Count</span></FluentNavLink>
+                    <FluentNavLink Href="@("tag/" + Uri.EscapeDataString(t.Slug))">@t.Name <span class="fn-count">@t.Count</span></FluentNavLink>
                 }
             </FluentNavGroup>
 
-            <FluentNavLink Href="/archive">归档</FluentNavLink>
-            <FluentNavLink Href="/about">关于</FluentNavLink>
+            <FluentNavLink Href="archive">归档</FluentNavLink>
+            <FluentNavLink Href="about">关于</FluentNavLink>
         </FluentNavMenu>
     }
 
