@@ -82,5 +82,24 @@ window.fluentNextGitHub = {
 
     getReturn: function () {
         try { return sessionStorage.getItem('fn_gh_return') || ''; } catch (e) { return ''; }
+    },
+
+    // 唤起 Gitalk 原生登录：Gitalk 用 github.com 同域 iframe 换 token（不踩 CORS），
+    // 登录后把 token 写入 gitalk:{clientID}，本服务轮询到即同步侧边栏账户。
+    // 在文章页的 #fn-comments 容器内找到 Gitalk 的登录链接并点击；非文章页（无评论区）则滚动提示。
+    triggerGitalkLogin: function () {
+        var box = document.getElementById('fn-comments');
+        if (!box) {
+            // 非文章页没有评论区：滚动到评论入口（若有）并提示
+            var hint = document.querySelector('.fn-comments-hint');
+            if (hint) hint.scrollIntoView({ behavior: 'smooth' });
+            return;
+        }
+        // Gitalk 的登录入口是跳转到 github.com 授权的 <a>
+        var links = box.querySelectorAll('a[href*="github.com/login/oauth/authorize"]');
+        if (links.length) { links[0].click(); return; }
+        var gl = box.querySelector('.gt-login, .gt-header .gt-login, a.gt-login');
+        if (gl) { gl.click(); return; }
+        box.scrollIntoView({ behavior: 'smooth' });
     }
 };

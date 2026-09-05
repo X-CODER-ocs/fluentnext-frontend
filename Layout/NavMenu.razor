@@ -154,7 +154,14 @@
 
     private void OpenSettings() => AppState.RequestOpenSettings();
 
-    private async Task Login() => await GitHub.LoginAsync();
+    private async Task Login()
+    {
+        // 文章页：唤起 Gitalk 原生登录（它自行换 token，绕开 CORS）；非文章页无评论区，提示去文章页。
+        if (_isArticle)
+            await GitHub.LoginAsync();
+        else
+            await JS.InvokeVoidAsync("alert", "评论登录请打开任意一篇文章，在底部评论区点击 Gitalk 的「登录」。");
+    }
     private async Task Logout() => await GitHub.LogoutAsync();
 
     public void Dispose()
