@@ -15,24 +15,14 @@ public class FluentNextConfig
     /// <summary>导航菜单</summary>
     public List<MenuItem> Menu { get; set; } = new();
 
-    /// <summary>评论配置：gitalk / utterances / none</summary>
+    /// <summary>评论配置：utterances / none</summary>
     public CommentsConfig Comments { get; set; } = new();
 }
 
 public class CommentsConfig
 {
-    public string Provider { get; set; } = "none"; // "gitalk" | "utterances" | "none"
-    public GitalkConfig Gitalk { get; set; } = new();
+    public string Provider { get; set; } = "utterances"; // "utterances" | "none"
     public UtterancesConfig Utterances { get; set; } = new();
-}
-
-public class GitalkConfig
-{
-    public string ClientID { get; set; } = "";
-    public string ClientSecret { get; set; } = "";
-    public string Repo { get; set; } = "";
-    public string Owner { get; set; } = "";
-    public List<string> Admin { get; set; } = new();
 }
 
 public class UtterancesConfig

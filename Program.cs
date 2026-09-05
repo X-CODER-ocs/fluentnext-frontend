@@ -19,8 +19,6 @@ builder.Services.AddScoped<ContentService>();
 builder.Services.AddScoped<ClientSettings>();
 // 跨组件 UI 状态（侧边栏设置按钮 → 主布局抽屉）
 builder.Services.AddScoped<AppState>();
-// 统一 GitHub 登录（驱动 Gitalk 评论：侧边栏登录 / 账户预览 / 登出）
-builder.Services.AddScoped<GitHubAuth>();
 
 // NexT 式主题配置（wwwroot/appsettings.json 的 FluentNext 段）
 builder.Services.Configure<FluentNextConfig>(builder.Configuration.GetSection("FluentNext"));

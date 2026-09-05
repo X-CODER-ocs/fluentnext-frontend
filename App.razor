@@ -2,8 +2,9 @@
 @using FluentNext.Frontend.Services
 @inject ClientSettings ClientSettings
 @inject IOptions<FluentNextConfig> Config
+@inject IJSRuntime JS
 
-@* Fluent UI 官方设计主题：强调色用品牌绿，明暗跟随客户端设置（存浏览器缓存）*@
+@* Fluent UI 官方设计主题：强调色用用户自定义色（默认品牌绿），明暗跟随客户端设置 *@
 <FluentDesignTheme Mode="@_mode" CustomColor="@_brandColor" StorageName="fluentnext-theme" />
 
 <ErrorBoundary>
@@ -16,10 +17,6 @@
         </Router>
     </ChildContent>
     <ErrorContent Context="ex">
-        @{
-            // 把真实异常打到浏览器 console，方便复现时定位（用户可粘贴给我）
-            Console.Error.WriteLine("FluentNext unhandled exception:\n" + ex.ToString());
-        }
         <div class="fn-fatal">
             <div class="fn-fatal-logo">Fluent<span>Next</span></div>
             <p class="fn-fatal-title">页面渲染时遇到未处理的异常</p>
@@ -36,16 +33,44 @@
     protected override async Task OnInitializedAsync()
     {
         await ClientSettings.InitAsync();
-        _brandColor = Config.Value.BrandColor;
+        _brandColor = string.IsNullOrWhiteSpace(ClientSettings.Data.Accent)
+            ? Config.Value.BrandColor
+            : ClientSettings.Data.Accent;
         _mode = ThemeToMode(ClientSettings.Data.Theme);
         ClientSettings.Changed += OnSettingsChanged;
+        ApplyUserTheme();
     }
 
     private void OnSettingsChanged()
     {
         _mode = ThemeToMode(ClientSettings.Data.Theme);
+        _brandColor = string.IsNullOrWhiteSpace(ClientSettings.Data.Accent)
+            ? Config.Value.BrandColor
+            : ClientSettings.Data.Accent;
+        ApplyUserTheme();
         _ = InvokeAsync(StateHasChanged);
     }
+
+    /// <summary>把用户自定义的主题（强调色 / 背景 / 文字 / 字体）写入 CSS 变量，覆盖 Fluent 默认令牌</summary>
+    private void ApplyUserTheme()
+    {
+        var d = ClientSettings.Data;
+        _ = JS.InvokeVoidAsync("fluentNextApplyUserTheme", new
+        {
+            accent = d.Accent,
+            background = d.Background,
+            foreground = d.Foreground,
+            fontFamily = FontToStack(d.FontFamily)
+        });
+    }
+
+    private static string FontToStack(string key) => key switch
+    {
+        "sans" => "Arial, 'Helvetica Neue', 'PingFang SC', 'Microsoft YaHei', sans-serif",
+        "serif" => "Georgia, 'Times New Roman', 'Songti SC', 'SimSun', serif",
+        "mono" => "'Cascadia Code', Consolas, 'Courier New', monospace",
+        _ => "'Segoe UI', system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif"
+    };
 
     private static DesignThemeModes ThemeToMode(string theme) => theme switch
     {

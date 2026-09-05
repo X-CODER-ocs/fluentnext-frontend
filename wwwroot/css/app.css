@@ -352,6 +352,21 @@ html, body {
 .fn-field > label { font-size: .9rem; color: var(--neutral-foreground-hint, #616161); }
 .fn-hint { font-size: .8rem; color: var(--neutral-foreground-hint, #797979); }
 
+/* 颜色选择器 + 「恢复默认」按钮（外观设置抽屉） */
+.fn-color {
+    width: 100%; height: 40px; padding: 2px;
+    border: 1px solid var(--neutral-stroke-rest, #c8c8c8);
+    border-radius: 6px;
+    background: var(--neutral-layer-1, #fafafa);
+    cursor: pointer; box-sizing: border-box;
+}
+.fn-reset {
+    align-self: flex-start; margin-top: .4rem;
+    font-size: .78rem; color: var(--neutral-foreground-hint, #797979);
+    background: none; border: none; padding: 0; cursor: pointer; text-decoration: underline;
+}
+.fn-reset:hover { color: var(--fn-accent, #4AA26F); }
+
 /* 窄屏：侧栏收起为顶部，整页自然滚动（不锁 100vh） */
 @media (max-width: 720px) {
     .fn-app { flex-direction: column; height: auto; min-height: 100vh; overflow: visible; }
@@ -367,10 +382,10 @@ html, body {
     gap: 1.1rem; background: var(--neutral-layer-1, #fafafa);
 }
 .fn-splash-logo { font-size: 2rem; font-weight: 700; letter-spacing: .5px; color: var(--neutral-foreground-rest, #242424); }
-.fn-splash-logo span { color: #4AA26F; }
+.fn-splash-logo span { color: var(--fn-accent, #4AA26F); }
 .fn-splash-spinner {
     width: 42px; height: 42px; border-radius: 50%;
-    border: 4px solid rgba(74,162,111,.25); border-top-color: #4AA26F;
+    border: 4px solid rgba(74,162,111,.25); border-top-color: var(--fn-accent, #4AA26F);
     animation: fn-spin .8s linear infinite;
 }
 .fn-splash-text { color: var(--neutral-foreground-hint, #6b6b6b); font-size: .9rem; }
@@ -388,7 +403,7 @@ html, body {
 #blazor-error-ui strong { color: #ff9b9b; }
 #blazor-error-ui .fn-err-msg { color: #d8d8d8; font-size: .88rem; }
 #blazor-error-ui .fn-err-actions { margin-left: auto; display: flex; gap: .8rem; align-items: center; }
-#blazor-error-ui .reload { color: #4AA26F; font-weight: 600; text-decoration: none; }
+#blazor-error-ui .reload { color: var(--fn-accent, #4AA26F); font-weight: 600; text-decoration: none; }
 #blazor-error-ui .reload:hover { text-decoration: underline; }
 #blazor-error-ui .dismiss { cursor: pointer; color: #b8b8b8; }
 #blazor-error-ui .dismiss:hover { color: #fff; }
@@ -400,11 +415,11 @@ html, body {
     background: var(--neutral-layer-1, #fafafa); padding: 2rem;
 }
 .fn-fatal-logo { font-size: 2.2rem; font-weight: 700; color: var(--neutral-foreground-rest, #242424); }
-.fn-fatal-logo span { color: #4AA26F; }
+.fn-fatal-logo span { color: var(--fn-accent, #4AA26F); }
 .fn-fatal-title { font-size: 1.1rem; margin: 0; }
 .fn-fatal-hint { color: var(--neutral-foreground-hint, #797979); font-size: .85rem; margin: 0; }
 .fn-fatal-reload {
     margin-top: .6rem; padding: .5rem 1.2rem; border-radius: 6px;
-    background: #4AA26F; color: #fff; text-decoration: none; font-weight: 600;
+    background: var(--fn-accent, #4AA26F); color: #fff; text-decoration: none; font-weight: 600;
 }
 .fn-fatal-reload:hover { background: #3d8d5e; }

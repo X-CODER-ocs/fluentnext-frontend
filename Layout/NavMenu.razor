@@ -5,7 +5,6 @@
 @inject ContentService Content
 @inject NavigationManager Nav
 @inject AppState AppState
-@inject GitHubAuth GitHub
 @inject IJSRuntime JS
 
 <div class="fn-navmenu">
@@ -60,32 +59,11 @@
         </FluentNavMenu>
     }
 
-    @* 分割线下：统一 GitHub 登录（驱动评论）+ 设置按钮；任何侧边栏都有 *@
-    @if (GitHub.IsGitalk)
-    {
-        <div class="fn-navfoot">
-            <FluentDivider />
-            @if (GitHub.IsLoggedIn && GitHub.User is not null)
-            {
-                <div class="fn-gh-user">
-                    <img class="fn-gh-avatar" src="@GitHub.User.AvatarUrl" alt="avatar" />
-                    <div class="fn-gh-meta">
-                        <span class="fn-gh-name">@GitHub.User.Login</span>
-                        <a href="@GitHub.User.HtmlUrl" target="_blank" rel="noopener" class="fn-gh-profile">GitHub 主页 ↗</a>
-                    </div>
-                    <FluentButton Appearance="Appearance.Lightweight" OnClick="Logout" Style="width:100%">退出登录</FluentButton>
-                </div>
-            }
-            else
-            {
-                <button type="button" class="fn-gh-login" @onclick="Login" title="登录 GitHub 后即可在文章页用 Gitalk 评论">
-                    <svg class="fn-gh-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"></path></svg>
-                    <span>通过 GitHub 登录</span>
-                </button>
-            }
-            <FluentButton Appearance="Appearance.Accent" OnClick="OpenSettings" Style="width:100%">设置</FluentButton>
-        </div>
-    }
+    @* 侧边栏底部：设置入口（常驻） *@
+    <div class="fn-navfoot">
+        <FluentDivider />
+        <FluentButton Appearance="Appearance.Accent" OnClick="OpenSettings" Style="width:100%">设置</FluentButton>
+    </div>
 </div>
 
 @code {
@@ -109,13 +87,10 @@
     protected override void OnInitialized()
     {
         Nav.LocationChanged += OnLocationChanged;
-        GitHub.Changed += OnGitHubChanged;
     }
 
     private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
         => _ = RefreshArticleState();
-
-    private void OnGitHubChanged() => _ = InvokeAsync(StateHasChanged);
 
     private async Task RefreshArticleState(ContentData? data = null)
     {
@@ -154,19 +129,8 @@
 
     private void OpenSettings() => AppState.RequestOpenSettings();
 
-    private async Task Login()
-    {
-        // 文章页：唤起 Gitalk 原生登录（它自行换 token，绕开 CORS）；非文章页无评论区，提示去文章页。
-        if (_isArticle)
-            await GitHub.LoginAsync();
-        else
-            await JS.InvokeVoidAsync("alert", "评论登录请打开任意一篇文章，在底部评论区点击 Gitalk 的「登录」。");
-    }
-    private async Task Logout() => await GitHub.LogoutAsync();
-
     public void Dispose()
     {
         Nav.LocationChanged -= OnLocationChanged;
-        GitHub.Changed -= OnGitHubChanged;
     }
 }

@@ -44,6 +44,13 @@ public class ClientSettings
     public void SetLayout(string layout) => Data.Layout = layout;
     public void SetTheme(string theme) => Data.Theme = theme;
     public void SetFontSize(int size) => Data.FontSize = size;
+
+    // 以下为「完整主题」自定义项：强调色 / 背景 / 文字 / 字体。
+    // 背景 / 文字留空字符串表示「跟随主题（不覆盖）」，由抽屉里的颜色选择器显示主题默认值但不写入覆盖。
+    public void SetAccent(string color) => Data.Accent = color;
+    public void SetBackground(string? color) => Data.Background = color ?? "";
+    public void SetForeground(string? color) => Data.Foreground = color ?? "";
+    public void SetFontFamily(string font) => Data.FontFamily = font;
 }
 
 public class Settings
@@ -51,4 +58,16 @@ public class Settings
     public string Layout { get; set; } = "magazine"; // list | magazine
     public string Theme { get; set; } = "System";     // Light | Dark | System
     public int FontSize { get; set; } = 16;           // 正文 px
+
+    /// <summary>强调色（自定义主色），默认品牌绿。空时回退到配置里的 BrandColor</summary>
+    public string Accent { get; set; } = "#4AA26F";
+
+    /// <summary>背景色（完整主题），空 = 跟随 Fluent 主题</summary>
+    public string Background { get; set; } = "";
+
+    /// <summary>文字色（完整主题），空 = 跟随 Fluent 主题</summary>
+    public string Foreground { get; set; } = "";
+
+    /// <summary>正文字体栈 key：system | sans | serif | mono</summary>
+    public string FontFamily { get; set; } = "system";
 }

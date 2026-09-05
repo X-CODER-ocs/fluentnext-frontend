@@ -3,6 +3,7 @@
 @using FluentNext.Frontend.Services
 @inject ContentService Content
 @inject IOptions<FluentNextConfig> Config
+@inject ClientSettings ClientSettings
 @inject IJSRuntime JS
 
 <PageTitle>@(_post?.Title ?? "文章")</PageTitle>
@@ -32,7 +33,8 @@ else
         </div>
         <section id="fn-comments" class="fn-comments">
             <h3 class="fn-comments-title">💬 评论</h3>
-            <p class="fn-comments-hint">评论由 GitHub Issues 驱动（Gitalk）。先在侧边栏点「通过 GitHub 登录」，即可在此发表评论。仓库：<code>X-CODER-ocs/blog</code>。</p>
+            <p class="fn-comments-hint">评论由 GitHub Issues 驱动（Utterances）。在下方点 <code>Sign in with GitHub</code> 登录后即可发表。仓库：<code>X-CODER-ocs/blog</code>。</p>
+            <div id="fn-comments-mount"></div>
         </section>
     </article>
 }
@@ -42,6 +44,7 @@ else
 
     private BlogPost? _post;
     private string? _lastCommentSlug;
+    private string? _lastTheme;
 
     protected override async Task OnParametersSetAsync()
     {
@@ -51,10 +54,13 @@ else
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        // 文章变化时（含首次）重新加载对应评论
-        if (_post is not null && _post.Slug != _lastCommentSlug)
+        if (_post is null) return;
+        var theme = ClientSettings.Data.Theme;
+        // 文章变化（含首次）或主题变化（影响 Utterances 配色）时重新加载评论
+        if (_post.Slug != _lastCommentSlug || theme != _lastTheme)
         {
             _lastCommentSlug = _post.Slug;
+            _lastTheme = theme;
             await JS.InvokeVoidAsync("fluentNextResetComments");
             var c = Config.Value.Comments;
             await JS.InvokeVoidAsync("fluentNextInitComments", new
@@ -63,17 +69,17 @@ else
                 repo = c.Utterances.Repo,
                 issueTerm = c.Utterances.IssueTerm,
                 label = c.Utterances.Label,
-                gitalk = new
-                {
-                    clientID = c.Gitalk.ClientID,
-                    clientSecret = c.Gitalk.ClientSecret,
-                    repo = c.Gitalk.Repo,
-                    owner = c.Gitalk.Owner,
-                    admin = c.Gitalk.Admin
-                },
+                theme = ThemeToUtterances(theme),
                 slug = _post.Slug,
                 title = _post.Title
             });
         }
     }
+
+    private static string ThemeToUtterances(string theme) => theme switch
+    {
+        "Light" => "github-light",
+        "Dark" => "github-dark",
+        _ => "preferred-color-scheme"
+    };
 }

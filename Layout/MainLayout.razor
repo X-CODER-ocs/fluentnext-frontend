@@ -5,7 +5,6 @@
 @inject IOptions<FluentNextConfig> Config
 @inject ContentService Content
 @inject AppState AppState
-@inject GitHubAuth GitHub
 @implements IDisposable
 
 @* 组件 Provider（Toast / Tooltip / MessageBar / Menu）*@
@@ -57,6 +56,33 @@
             <FluentSlider @bind-Value="FontSize" Min="14" Max="22" Step="1" />
         </div>
 
+        <div class="fn-field">
+            <label>强调色（主色）</label>
+            <input type="color" class="fn-color" @bind="Accent" />
+        </div>
+
+        <div class="fn-field">
+            <label>背景色</label>
+            <input type="color" class="fn-color" @bind="BgValue" />
+            <button type="button" class="fn-reset" @onclick="ResetBg">恢复为跟随主题</button>
+        </div>
+
+        <div class="fn-field">
+            <label>文字色</label>
+            <input type="color" class="fn-color" @bind="FgValue" />
+            <button type="button" class="fn-reset" @onclick="ResetFg">恢复为跟随主题</button>
+        </div>
+
+        <div class="fn-field">
+            <label>字体</label>
+            <FluentSelect TOption="string" Value="@ClientSettings.Data.FontFamily" ValueChanged="OnFontChanged">
+                <FluentOption TOption="string" Value="system">系统默认</FluentOption>
+                <FluentOption TOption="string" Value="sans">无衬线（黑体）</FluentOption>
+                <FluentOption TOption="string" Value="serif">衬线（宋体）</FluentOption>
+                <FluentOption TOption="string" Value="mono">等宽（代码）</FluentOption>
+            </FluentSelect>
+        </div>
+
         <p class="fn-hint">设置保存在本浏览器，不同设备 / 不同观看者互不影响。</p>
     </aside>
 }
@@ -70,8 +96,6 @@
         var data = await Content.GetContentAsync();
         if (!string.IsNullOrEmpty(data.Site.Title)) _siteTitle = data.Site.Title;
         AppState.SettingsOpenRequested += OnSettingsRequested;
-        // 完成可能挂起的 GitHub OAuth 回调（URL 带 ?code= 时换 token + 拉账户）
-        await GitHub.InitAsync();
     }
 
     private void OnSettingsRequested()
@@ -94,11 +118,54 @@
         await ClientSettings.SaveAsync();
     }
 
+    private async Task OnFontChanged(string value)
+    {
+        ClientSettings.SetFontFamily(value);
+        await ClientSettings.SaveAsync();
+    }
+
     private int FontSize
     {
         get => ClientSettings.Data.FontSize;
         set { ClientSettings.SetFontSize(value); _ = ClientSettings.SaveAsync(); }
     }
+
+    // 强调色：直接双向绑定到设置
+    private string Accent
+    {
+        get => ClientSettings.Data.Accent;
+        set { ClientSettings.SetAccent(value); _ = ClientSettings.SaveAsync(); }
+    }
+
+    // 背景 / 文字色：为空表示「跟随主题」，此时颜色选择器显示主题默认值但不写入覆盖。
+    private string BgValue
+    {
+        get => string.IsNullOrEmpty(ClientSettings.Data.Background) ? ThemeDefaultBg : ClientSettings.Data.Background;
+        set { ClientSettings.SetBackground(value); _ = ClientSettings.SaveAsync(); }
+    }
+
+    private string FgValue
+    {
+        get => string.IsNullOrEmpty(ClientSettings.Data.Foreground) ? ThemeDefaultFg : ClientSettings.Data.Foreground;
+        set { ClientSettings.SetForeground(value); _ = ClientSettings.SaveAsync(); }
+    }
+
+    private async Task ResetBg()
+    {
+        ClientSettings.SetBackground("");
+        await ClientSettings.SaveAsync();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task ResetFg()
+    {
+        ClientSettings.SetForeground("");
+        await ClientSettings.SaveAsync();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private string ThemeDefaultBg => ClientSettings.Data.Theme == "Dark" ? "#1f1f1f" : "#fafafa";
+    private string ThemeDefaultFg => ClientSettings.Data.Theme == "Dark" ? "#f3f3f3" : "#242424";
 
     public void Dispose() => AppState.SettingsOpenRequested -= OnSettingsRequested;
 }
