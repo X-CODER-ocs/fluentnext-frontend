@@ -5,6 +5,7 @@
 @inject IOptions<FluentNextConfig> Config
 @inject ContentService Content
 @inject AppState AppState
+@inject NavigationManager Nav
 @implements IDisposable
 
 @* 组件 Provider（Toast / Tooltip / MessageBar / Menu）*@
@@ -13,10 +14,17 @@
 <FluentMessageBarProvider />
 <FluentMenuProvider />
 
-<div class="fn-app">
+<div class="fn-app @(_navOpen ? "nav-open" : "")">
     <NavMenu />
+    @if (_navOpen)
+    {
+        <div class="fn-nav-backdrop" @onclick="CloseNav"></div>
+    }
     <main class="fn-main">
         <header class="fn-topbar">
+            <FluentButton Class="fn-hamburger" Appearance="Appearance.Lightweight" OnClick="ToggleNav" title="菜单" aria-label="打开导航菜单">
+                <span class="fn-hamburger-icon">☰</span>
+            </FluentButton>
             <span class="fn-brand">@(_siteTitle)</span>
         </header>
         <div class="fn-body" style="font-size:@(ClientSettings.Data.FontSize)px">
@@ -89,6 +97,7 @@
 
 @code {
     private bool _showSettings;
+    private bool _navOpen;
     private string _siteTitle = "X-CODER";
 
     protected override async Task OnInitializedAsync()
@@ -98,8 +107,21 @@
         AppState.SettingsOpenRequested += OnSettingsRequested;
     }
 
+    protected override void OnInitialized()
+    {
+        Nav.LocationChanged += OnLocationChanged;
+    }
+
+    // 路由切换后收起移动端抽屉，避免「点完链接还盖着内容」
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+        => _navOpen = false;
+
+    private void ToggleNav() => _navOpen = !_navOpen;
+    private void CloseNav() => _navOpen = false;
+
     private void OnSettingsRequested()
     {
+        _navOpen = false;      // 从抽屉里点「设置」时先收起导航抽屉
         _showSettings = true;
         _ = InvokeAsync(StateHasChanged);
     }
@@ -167,5 +189,9 @@
     private string ThemeDefaultBg => ClientSettings.Data.Theme == "Dark" ? "#1f1f1f" : "#fafafa";
     private string ThemeDefaultFg => ClientSettings.Data.Theme == "Dark" ? "#f3f3f3" : "#242424";
 
-    public void Dispose() => AppState.SettingsOpenRequested -= OnSettingsRequested;
+    public void Dispose()
+    {
+        AppState.SettingsOpenRequested -= OnSettingsRequested;
+        Nav.LocationChanged -= OnLocationChanged;
+    }
 }
