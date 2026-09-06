@@ -188,7 +188,7 @@ html, body {
 }
 .fn-markdown pre {
     background: var(--neutral-layer-3, #1f1f1f);
-    color: #e6e6e6;
+    color: var(--neutral-foreground-rest, #242424);
     padding: 1rem;
     border-radius: 8px;
     overflow-x: auto;
