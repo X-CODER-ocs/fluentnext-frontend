@@ -45,3 +45,8 @@ window.fluentNextApplyUserTheme = function (s) {
 
     style.textContent = rules;
 };
+
+// 新标签打开外部链接（RSS 订阅按钮用）：相对地址会按当前页自动解析为 /blog/atom.xml
+window.fluentNextOpenExternal = function (url) {
+    window.open(url, '_blank', 'noopener,noreferrer');
+};
