@@ -252,6 +252,19 @@ html, body {
 }
 .fn-navfoot fluent-divider { margin: .75rem 0; }
 
+/* RSS 订阅按钮：位于设置按钮上方，强调色描边风格（与设置实心按钮区分） */
+.fn-rss-btn {
+    display: flex; align-items: center; justify-content: center; gap: .45rem;
+    width: 100%; padding: .55rem .8rem; margin-bottom: .5rem;
+    border: 1px solid var(--accent-color-base, #4AA26F);
+    color: var(--accent-color-base, #4AA26F);
+    border-radius: 6px; font-weight: 600; font-size: .92rem;
+    text-decoration: none; background: transparent; cursor: pointer;
+    box-sizing: border-box; transition: background .15s ease, color .15s ease;
+}
+.fn-rss-btn:hover { background: var(--accent-color-base, #4AA26F); color: #fff; }
+.fn-rss-ico { width: 16px; height: 16px; fill: currentColor; flex: none; }
+
 /* GitHub 登录按钮（用于 Utterances 评论：登录后在文章页即可评论） */
 .fn-gh-login {
     display: flex;

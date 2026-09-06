@@ -25,7 +25,11 @@ public class ContentService
     {
         try
         {
-            var data = await _http.GetFromJsonAsync<ContentData>(apiPath, _jsonOptions);
+            // 绕过浏览器 HTTP 缓存：content.json 在每次部署时变化（新增/修改文章），
+            // 若不破除缓存，首页会一直显示旧的文章列表。用唯一查询参数保证每次拉取都是最新。
+            var sep = apiPath.Contains('?') ? '&' : '?';
+            var url = $"{apiPath}{sep}_={DateTime.UtcNow.Ticks}";
+            var data = await _http.GetFromJsonAsync<ContentData>(url, _jsonOptions);
             _cache = data ?? new ContentData();
         }
         catch

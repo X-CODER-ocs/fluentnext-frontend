@@ -15,6 +15,9 @@ public class FluentNextConfig
     /// <summary>导航菜单</summary>
     public List<MenuItem> Menu { get; set; } = new();
 
+    /// <summary>RSS / Atom 订阅源地址；相对路径会随 base href(/blog/) 解析为 /blog/atom.xml</summary>
+    public string FeedUrl { get; set; } = "atom.xml";
+
     /// <summary>评论配置：utterances / none</summary>
     public CommentsConfig Comments { get; set; } = new();
 }
