@@ -2,6 +2,15 @@
 <html lang="zh-CN">
 
 <head>
+    <!-- 清理旧 NexT PWA 残留的 Service Worker：线上已删除 service-worker.js，旧 SW 注册会反复 404。
+         主动注销所有已注册 SW，避免控制台持续报错；无 SW 时静默跳过。 -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.getRegistrations().then(function (regs) {
+                (regs || []).forEach(function (r) { r.unregister(); });
+            }).catch(function () { });
+        }
+    </script>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>FluentNext</title>
@@ -9,6 +18,11 @@
     <link rel="preload" id="webassembly" />
     <link rel="stylesheet" href="css/app.css" />
     <link rel="stylesheet" href="_content/Microsoft.FluentUI.AspNetCore.Components/css/reboot.css" />
+    <!-- 代码块语法高亮：highlight.js 明暗双主题（跟随 Fluent 主题切换）。
+         github = 浅色，github-dark = 深色（默认禁用，由 theme.js 按当前主题启用其一）。
+         若 CDN 不可达，代码块仍按前景色可读（不影响布局）。 -->
+    <link id="hljs-light" rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" />
+    <link id="hljs-dark" rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" disabled />
     <link rel="icon" type="image/png" href="favicon.png" />
     <link href="FluentNext.Frontend.styles.css" rel="stylesheet" />
     <!-- RSS / Atom 自动发现：让 RSS 阅读器与 RSS Hub 浏览器插件能识别订阅源 -->
@@ -64,6 +78,8 @@
          且要先于 Blazor，否则 FluentNavMenu 等组件渲染时 WC 尚未注册，
          会对 ElementReference 调 addEventListener 而抛 “An unhandled error”。 -->
     <script src="_content/Microsoft.FluentUI.AspNetCore.Components/Microsoft.FluentUI.AspNetCore.Components.lib.module.js" type="module"></script>
+    <!-- 语法高亮引擎（highlight.js）。同步加载确保 Blazor 渲染文章前已就绪；CDN 不可达时本脚本静默失败，代码块仍可读。 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
     <script src="js/theme.js"></script>
     <script src="js/comments.js"></script>
     <script src="_framework/blazor.webassembly.js"></script>
