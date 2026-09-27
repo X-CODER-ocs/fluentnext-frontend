@@ -74,15 +74,39 @@
         </div>
     </div>
 
-    <!-- Fluent UI Web Components 脚本：必须同步（按顺序）加载，
-         且要先于 Blazor，否则 FluentNavMenu 等组件渲染时 WC 尚未注册，
-         会对 ElementReference 调 addEventListener 而抛 “An unhandled error”。 -->
+    <!-- Fluent UI Web Components 脚本（type=module，延迟执行）。 -->
     <script src="_content/Microsoft.FluentUI.AspNetCore.Components/Microsoft.FluentUI.AspNetCore.Components.lib.module.js" type="module"></script>
-    <!-- 语法高亮引擎（highlight.js）。同步加载确保 Blazor 渲染文章前已就绪；CDN 不可达时本脚本静默失败，代码块仍可读。 -->
+    <!-- 语法高亮引擎（highlight.js）。CDN 不可达时本脚本静默失败，代码块仍按前景色可读。 -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
     <script src="js/theme.js"></script>
     <script src="js/comments.js"></script>
-    <script src="_framework/blazor.webassembly.js"></script>
+    <!--
+      修复「开屏崩」：lib.module.js 是 type=module（延迟执行），若 Blazor 立即自启，
+      首屏渲染 FluentNavMenu 时底层 Web Components 尚未注册，会对 ElementReference 调
+      addEventListener 而抛 “An unhandled error” → 整条电路崩 → ErrorBoundary。
+      做法：blazor 设 autostart=false，显式等待关键 Fluent 组件注册完成（3s 兜底超时，
+      防止 WC 加载失败导致永久卡死）后再 Blazor.start()。
+    -->
+    <script src="_framework/blazor.webassembly.js" autostart="false"></script>
+    <script>
+      (async () => {
+        try {
+          if (window.customElements && customElements.whenDefined) {
+            await Promise.race([
+              Promise.all([
+                customElements.whenDefined('fluent-nav-menu'),
+                customElements.whenDefined('fluent-button')
+              ]),
+              new Promise(function (r) { setTimeout(r, 3000); })
+            ]);
+          }
+        } catch (e) { /* 忽略，走兜底启动 */ }
+        if (window.Blazor && window.Blazor.start) {
+          try { await window.Blazor.start(); }
+          catch (e) { console.error('Blazor.start failed', e); }
+        }
+      })();
+    </script>
 </body>
 
 </html>
